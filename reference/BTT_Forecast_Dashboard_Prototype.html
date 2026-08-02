@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Below the Trusses — Forecast Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#1c2430;
+    --blueprint:#1e3a5f;
+    --blueprint-line: rgba(255,255,255,0.14);
+    --paper:#f6f3ec;
+    --paper-line: rgba(30,58,95,0.09);
+    --brass:#b8894a;
+    --brass-dark:#8f6532;
+    --sage:#5c7a63;
+    --terracotta:#b1543a;
+    --white:#fffdf9;
+    --ok:#4d7a5c;
+    --warn:#b1543a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    background-image:
+      linear-gradient(var(--paper-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--paper-line) 1px, transparent 1px);
+    background-size: 28px 28px;
+    color:var(--ink);
+    font-family: 'Georgia', 'Iowan Old Style', serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family: 'SFMono-Regular', 'Menlo', 'Consolas', monospace; letter-spacing:0.02em;}
+
+  header{
+    background:var(--blueprint);
+    background-image:
+      linear-gradient(var(--blueprint-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--blueprint-line) 1px, transparent 1px);
+    background-size: 24px 24px;
+    color:var(--white);
+    padding: 36px 40px 30px;
+    position:relative;
+    overflow:hidden;
+  }
+  header .eyebrow{
+    font-family:'SFMono-Regular',monospace;
+    font-size:11px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:#a9c4dd;
+    margin-bottom:10px;
+  }
+  header h1{
+    font-family:'Georgia',serif;
+    font-weight:400;
+    font-size:38px;
+    margin:0 0 6px;
+    letter-spacing:0.01em;
+  }
+  header h1 em{ font-style:italic; color:var(--brass); font-weight:400;}
+  header p.sub{ margin:0; color:#cddaea; font-size:14.5px; max-width:640px; line-height:1.5;}
+  .draft-corner{
+    position:absolute; top:24px; right:40px; text-align:right;
+    font-family:'SFMono-Regular',monospace; font-size:10.5px; color:#8fa9c2; line-height:1.6;
+  }
+
+  main{ max-width:1180px; margin:0 auto; padding: 30px 40px 80px;}
+
+  .kpi-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:34px;}
+  .kpi{
+    background:var(--white); border:1px solid var(--paper-line); border-top:3px solid var(--brass);
+    padding:18px 20px; position:relative;
+  }
+  .kpi .label{ font-family:'SFMono-Regular',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:0.1em; color:#8a7a5f; margin-bottom:8px;}
+  .kpi .value{ font-size:26px; color:var(--ink); }
+  .kpi .delta{ font-family:'SFMono-Regular',monospace; font-size:12px; margin-top:6px;}
+  .delta.up{ color:var(--ok);} .delta.down{ color:var(--warn);}
+
+  section{ margin-bottom:46px; }
+  .section-head{ display:flex; align-items:baseline; justify-content:space-between; border-bottom:1.5px solid var(--ink); padding-bottom:8px; margin-bottom:18px;}
+  .section-head h2{ font-weight:400; font-size:21px; margin:0; }
+  .section-head .tag{ font-family:'SFMono-Regular',monospace; font-size:10.5px; color:#8a7a5f; text-transform:uppercase; letter-spacing:0.08em;}
+  .section-note{ font-size:13px; color:#665e4f; margin:-10px 0 18px; line-height:1.5; max-width:760px;}
+
+  .chart-wrap{ background:var(--white); border:1px solid var(--paper-line); padding:20px; height:320px;}
+
+  .year-tabs{ display:flex; gap:6px; margin-bottom:16px;}
+  .year-tabs button{
+    font-family:'SFMono-Regular',monospace; font-size:12px; letter-spacing:0.04em;
+    padding:7px 16px; background:none; border:1px solid var(--ink); color:var(--ink);
+    cursor:pointer; text-transform:uppercase;
+  }
+  .year-tabs button.active{ background:var(--blueprint); color:white; border-color:var(--blueprint);}
+
+  table{ width:100%; border-collapse:collapse; background:var(--white); font-size:13px;}
+  th,td{ padding:9px 12px; text-align:right; border-bottom:1px solid var(--paper-line);}
+  th:first-child, td:first-child{ text-align:left; }
+  thead th{ font-family:'SFMono-Regular',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:0.06em; color:#8a7a5f; border-bottom:2px solid var(--ink); font-weight:400;}
+  tbody tr:hover{ background:#faf7ef; }
+  tr.total-row td{ font-weight:700; border-top:1.5px solid var(--ink); border-bottom:none; }
+  td.type-comm{ color:var(--blueprint); font-family:'SFMono-Regular',monospace; font-size:11px;}
+  td.type-res{ color:var(--sage); font-family:'SFMono-Regular',monospace; font-size:11px;}
+  td.type-furn{ color:var(--brass-dark); font-family:'SFMono-Regular',monospace; font-size:11px;}
+
+  .two-col{ display:grid; grid-template-columns: 1.3fr 1fr; gap:24px; align-items:start;}
+
+  .referral-bar-row{ display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--paper-line); font-size:13px;}
+  .referral-bar-row .name{ width:150px; flex-shrink:0; }
+  .referral-bar-row .bar-track{ flex:1; background:var(--paper); height:14px; position:relative; border:1px solid var(--paper-line);}
+  .referral-bar-row .bar-fill{ background:var(--brass); height:100%; }
+  .referral-bar-row .amt{ width:80px; text-align:right; font-family:'SFMono-Regular',monospace; font-size:11.5px; color:#665e4f;}
+
+  .gantt{ background:var(--white); border:1px solid var(--paper-line); padding:20px; overflow-x:auto;}
+  .gantt-row{ display:grid; grid-template-columns:190px repeat(12,1fr); align-items:center; height:30px; border-bottom:1px solid var(--paper-line);}
+  .gantt-row.header-row{ font-family:'SFMono-Regular',monospace; font-size:10px; text-transform:uppercase; color:#8a7a5f; height:24px; border-bottom:1.5px solid var(--ink);}
+  .gantt-row .gname{ font-size:12.5px; padding-right:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .gantt-cell{ position:relative; height:100%; border-left:1px dashed var(--paper-line);}
+  .gantt-bar{ position:absolute; top:6px; height:18px; border-radius:2px;}
+  .gantt-bar.Commercial{ background:var(--blueprint); }
+  .gantt-bar.Residential{ background:var(--sage); }
+  .gantt-bar.Furniture{ background:var(--brass); }
+
+  .legend{ display:flex; gap:18px; font-family:'SFMono-Regular',monospace; font-size:11px; margin-bottom:12px; color:#665e4f;}
+  .legend span{ display:inline-flex; align-items:center; gap:6px;}
+  .swatch{ width:11px; height:11px; display:inline-block; border-radius:2px;}
+  .swatch.Commercial{ background:var(--blueprint);} .swatch.Residential{ background:var(--sage);} .swatch.Furniture{ background:var(--brass);}
+
+  .lost-table td:nth-child(3){ text-align:right; font-family:'SFMono-Regular',monospace;}
+  .status-pill{ font-family:'SFMono-Regular',monospace; font-size:10px; padding:2px 8px; border:1px solid var(--terracotta); color:var(--terracotta); text-transform:uppercase; }
+
+  footer{ max-width:1180px; margin:0 auto; padding:0 40px 60px; font-size:12px; color:#8a7a5f; font-family:'SFMono-Regular',monospace; line-height:1.6;}
+  footer .gap{ background:var(--white); border:1px solid var(--paper-line); border-left:3px solid var(--terracotta); padding:16px 20px; margin-top:10px;}
+  footer .gap b{ color:var(--ink); font-family:'Georgia',serif; font-size:13px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="draft-corner">SCALE: MONTHLY&nbsp;&nbsp;·&nbsp;&nbsp;REV: PROTOTYPE&nbsp;&nbsp;·&nbsp;&nbsp;FY24–FY26</div>
+  <div class="eyebrow">Business Development &amp; Forecast — Prototype v0.1</div>
+  <h1>Below the <em>Trusses</em></h1>
+  <p class="sub">A working sketch of your forecasting tool, built from the actual 2024–2026 tracker. Everything below is live data — swap in new signed contracts and the numbers move.</p>
+</header>
+
+<main>
+
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <section>
+    <div class="section-head">
+      <h2>Year-over-Year Revenue</h2>
+      <span class="tag">Signed &amp; Committed Business</span>
+    </div>
+    <p class="section-note">2024 and 2025 are closed/actual months. 2026 includes everything currently signed or committed in the tracker — treat later 2026 months as a live forecast that will fill in as more SOWs are signed.</p>
+    <div class="chart-wrap"><canvas id="yoyChart"></canvas></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Monthly Breakdown</h2>
+      <span class="tag">Residential · Commercial · Furniture</span>
+    </div>
+    <div class="year-tabs" id="yearTabs"></div>
+    <table id="breakdownTable"></table>
+  </section>
+
+  <section>
+    <div class="two-col">
+      <div>
+        <div class="section-head">
+          <h2>Referral Sources</h2>
+          <span class="tag">All Years, Lifetime $</span>
+        </div>
+        <p class="section-note">Parsed from client names recorded in parentheses — e.g. "Wallace (Cyr)" credits Cyr as the referrer. This is currently inferred from naming convention; a dedicated Referral field would make it exact.</p>
+        <div id="referralList"></div>
+      </div>
+      <div>
+        <div class="section-head">
+          <h2>Business Mix</h2>
+          <span class="tag">2026 Committed</span>
+        </div>
+        <div class="chart-wrap" style="height:280px;"><canvas id="mixChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Project Timeline</h2>
+      <span class="tag">2026 · Active Engagements</span>
+    </div>
+    <p class="section-note">A first pass at the Gantt view you asked about — built from months with recorded revenue per client, so bars currently show "billing activity" rather than true start/end dates. Once start and completion dates are captured, this becomes a real project-duration timeline.</p>
+    <div class="legend">
+      <span><span class="swatch Commercial"></span>Commercial</span>
+      <span><span class="swatch Residential"></span>Residential</span>
+      <span><span class="swatch Furniture"></span>Furniture</span>
+    </div>
+    <div class="gantt" id="ganttWrap"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>SOW Sent — Did Not Materialize</h2>
+      <span class="tag">Historical, for YoY Context</span>
+    </div>
+    <p class="section-note">Pipeline that received a proposal but never converted. Useful as a win-rate signal, not counted in revenue totals above.</p>
+    <table class="lost-table" id="lostTable"></table>
+  </section>
+
+</main>
+
+<footer>
+  DATA GAPS TO CLOSE FOR THE FULL BUILD
+  <div class="gap"><b>Project state / geography</b> — not yet tracked per client; needed for the state breakdown you mentioned.</div>
+  <div class="gap"><b>Subcontractor assignment</b> — Mariano Oliveti, Rachel Roberts, Lee Mccoy, Rusty Ragsdale aren't linked to specific projects yet; needed for subcontractor cost/utilization views.</div>
+  <div class="gap"><b>Project start/completion dates</b> — current data only has monthly billing amounts, not true project duration, which the Gantt view above approximates around.</div>
+  <div class="gap"><b>Explicit referral field</b> — currently inferred from "(Name)" in the client field; a dedicated column would remove ambiguity and let non-obvious referrals be captured too.</div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+const DATA = {"months": ["Jan-24", "Feb-24", "Mar-24", "Apr-24", "May-24", "Jun-24", "Jul-24", "Aug-24", "Sep-24", "Oct-24", "Nov-24", "Dec-24", "Jan-25", "Feb-25", "Mar-25", "Apr-25", "May-25", "Jun-25", "Jul-25", "Aug-25", "Sep-25", "Oct-25", "Nov-25", "Dec-25", "Jan-26", "Feb-26", "Mar-26", "Apr-26", "May-26", "Jun-26", "Jul-26", "Aug-26", "Sep-26", "Oct-26", "Nov-26", "Dec-26"], "records": [{"client": "Cyr, Austin", "type": "Residential", "active": "No", "referral": null, "monthly": {"Oct-25": 1400, "Feb-26": 1400}, "total": 2800}, {"client": "Azar_Kennesaw/Acworth", "type": "Residential", "active": "No", "referral": null, "monthly": {"Feb-24": 160}, "total": 160}, {"client": "Azar_McDonough", "type": "Residential", "active": "No", "referral": null, "monthly": {"Dec-26": 280}, "total": 280}, {"client": "Azar_New Peachtree", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Dec-26": 260}, "total": 260}, {"client": "Azar_Sturbridge", "type": "Residential", "active": "No", "referral": null, "monthly": {"Mar-25": 560}, "total": 560}, {"client": "Azar_Yalda", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Mar-25": 160}, "total": 160}, {"client": "Baulder", "type": "Residential", "active": "No", "referral": null, "monthly": {"Jun-24": 300}, "total": 300}, {"client": "C. Keheley (Bahamas)", "type": "Commercial", "active": "No", "referral": "Bahamas", "monthly": {"Mar-24": 300}, "total": 300}, {"client": "COE__LT Gov Suite", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Sep-24": 1980, "Mar-25": 180}, "total": 2160}, {"client": "COE_ABS", "type": "Residential", "active": "No", "referral": null, "monthly": {"Dec-25": 1178.25}, "total": 1178.25}, {"client": "COE_Agriculture Building", "type": "Commercial", "active": "Yes", "referral": null, "monthly": {"Aug-26": 2000, "Sep-26": 1000, "Oct-26": 1000}, "total": 4000}, {"client": "COE_Calhoun", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Apr-26": 2130}, "total": 2130}, {"client": "COE_Capital Suites", "type": "Commercial", "active": "Yes", "referral": null, "monthly": {"Aug-26": 3750, "Sep-26": 1000, "Oct-26": 1000}, "total": 5750}, {"client": "COE_Carroll County Admin", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Apr-26": 9390}, "total": 9390}, {"client": "COE_Carroll County Courthouse", "type": "Commercial", "active": "No", "referral": null, "monthly": {"May-25": 8220}, "total": 8220}, {"client": "COE_Danielle Stanley-Phi Mu", "type": "Furniture", "active": "No", "referral": null, "monthly": {"Aug-25": 5673.56, "Sep-25": 4572.31, "Nov-25": 2121.54, "Dec-25": 3464.94}, "total": 15832.35}, {"client": "COE_Carroll County Conference/ Admin", "type": "Commercial", "active": "Yes", "referral": null, "monthly": {"Jun-26": 1080, "Aug-26": 500}, "total": 1580}, {"client": "COE_DNR", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Mar-25": 210}, "total": 210}, {"client": "COE_Douglas County", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Apr-25": 3030}, "total": 3030}, {"client": "COE_GA Capital Reno", "type": "Furniture", "active": "No", "referral": null, "monthly": {"Sep-25": 5960.38, "Oct-25": 2352.88}, "total": 8313.26}, {"client": "COE_GA Capital Reno", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Dec-25": 750}, "total": 750}, {"client": "COE_GBA Law", "type": "Commercial", "active": "No", "referral": null, "monthly": {"May-24": 11050, "Jan-25": 3700}, "total": 14750}, {"client": "COE_GBA Patrol Post", "type": "Commercial", "active": "No", "referral": null, "monthly": {"May-24": 780, "Mar-25": 210}, "total": 990}, {"client": "COE_Helicopter Hangar", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Nov-24": 1320}, "total": 1320}, {"client": "COE_House Clerk", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Nov-24": 1740, "Mar-25": 210}, "total": 1950}, {"client": "COE_InfraMetals", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Apr-25": 840}, "total": 840}, {"client": "COE_Janus Intern.", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Apr-25": 480}, "total": 480}, {"client": "COE_Danielle Stanley-Phi Mu", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Mar-26": 3180}, "total": 3180}, {"client": "COE_Legislative Building", "type": "Commercial", "active": "Yes", "referral": null, "monthly": {"Dec-25": 6114, "Jun-26": 14921.23, "Jul-26": 10911.2, "Aug-26": 10000, "Sep-26": 7000, "Nov-26": 6000}, "total": 54946.43}, {"client": "COE_Nathan Deal Judicial", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Jul-24": 270}, "total": 270}, {"client": "COE_Powder Springs", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Mar-25": 690}, "total": 690}, {"client": "COE_Silvey Office", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Mar-25": 4140}, "total": 4140}, {"client": "COE_Veteran Affairs", "type": "Furniture", "active": "No", "referral": null, "monthly": {"Jul-25": 1568.58}, "total": 1568.58}, {"client": "COE_WGTC Murphy", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Apr-25": 300, "Mar-26": 210}, "total": 510}, {"client": "COE_Mens Prison", "type": "Commercial", "active": "Yes", "referral": null, "monthly": {"Dec-26": 1000}, "total": 1000}, {"client": "COE_SouthWire", "type": "Commercial", "active": "Yes", "referral": null, "monthly": {"Aug-26": 3500}, "total": 3500}, {"client": "COEC_SMI", "type": "Commercial", "active": "Yes", "referral": null, "monthly": {"Aug-26": 690}, "total": 690}, {"client": "COEC_TipTop Poultry", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Mar-26": 270}, "total": 270}, {"client": "Dantzler_Brodsky", "type": "Residential", "active": "No", "referral": null, "monthly": {"Jun-25": 740, "Aug-25": 750, "Nov-25": 750}, "total": 2240}, {"client": "Dantzler_Fleet Landing", "type": "Residential", "active": "No", "referral": null, "monthly": {"Jul-25": 975, "Nov-25": 975}, "total": 1950}, {"client": "(Dantzler)_Kelli Marsh", "type": "Residential", "active": "No", "referral": "Dantzler", "monthly": {"Apr-25": 240, "May-25": 1402.5, "Jan-26": 1402.5}, "total": 3045.0}, {"client": "COEC_UES Norross Engineering", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Mar-26": 480}, "total": 480}, {"client": "Commission (Rugs,Shades,Tile, Cabinetry)", "type": "Residential", "active": "Yes", "referral": "Rugs,Shades,Tile, Cabinetry", "monthly": {"Jun-25": 1000, "Sep-25": 1384, "Mar-26": 3200, "Jun-26": 462}, "total": 6046}, {"client": "Dantzler Ulvi (Bill Dantzler)", "type": "Residential", "active": "Yes", "referral": "Bill Dantzler", "monthly": {"Sep-26": 1000}, "total": 1000}, {"client": "Danztler_Spanish Point", "type": "Residential", "active": "No", "referral": null, "monthly": {"Sep-25": 750, "Nov-25": 750}, "total": 1500}, {"client": "Focus Design Group_Horizon", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Jul-25": 1200}, "total": 1200}, {"client": "Frank & Cindy Cyr (Garnet)", "type": "Residential", "active": "No", "referral": "Garnet", "monthly": {"Apr-25": 1212.5, "Aug-25": 1212.5, "Nov-25": 1212.5, "Feb-26": 1212.5}, "total": 4850.0}, {"client": "Haghani", "type": "Residential", "active": "No", "referral": null, "monthly": {"Jun-24": 550, "Aug-24": 550}, "total": 1100}, {"client": "Hersey", "type": "Residential", "active": "No", "referral": null, "monthly": {"Mar-24": 1250, "Sep-24": 1250, "Nov-24": 1250, "Jun-25": 1250}, "total": 5000}, {"client": "Katz_Fletcher", "type": "Residential", "active": "No", "referral": null, "monthly": {"May-25": 425, "Jun-25": 425}, "total": 850}, {"client": "Duchausee, Garnet", "type": "Residential", "active": "Yes", "referral": null, "monthly": {"Mar-26": 818, "Aug-26": 500}, "total": 1318}, {"client": "Genners (Cyr)", "type": "Residential", "active": "Yes", "referral": "Cyr", "monthly": {"Feb-26": 1725, "Aug-26": 1725, "Sep-26": 500, "Oct-26": 500}, "total": 4450}, {"client": "Reddy Wang", "type": "Residential", "active": "No", "referral": null, "monthly": {"Feb-24": 900, "Mar-24": 900}, "total": 1800}, {"client": "Seeley", "type": "Residential", "active": "No", "referral": null, "monthly": {"Jul-25": 660}, "total": 660}, {"client": "Smart Interior Group", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Mar-24": 6200}, "total": 6200}, {"client": "Smart_BOMA Monarch", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Jan-26": 9450}, "total": 9450}, {"client": "Krusing", "type": "Residential", "active": "No", "referral": null, "monthly": {"Aug-24": 2325, "Aug-25": 2325, "Jan-26": 2325, "May-26": 2325}, "total": 9300}, {"client": "(Monroe)_Ingram", "type": "Residential", "active": "No", "referral": "Monroe", "monthly": {"Nov-25": 500, "Feb-26": 225}, "total": 725}, {"client": "Mckinney, Maureen (Remodel Jax)", "type": "Residential", "active": "No", "referral": "Remodel Jax", "monthly": {"Apr-26": 800}, "total": 800}, {"client": "Monroe", "type": "Residential", "active": "Yes", "referral": null, "monthly": {"Jan-24": 940, "Mar-24": 2020, "May-24": 2480, "Aug-24": 1917, "Sep-24": 1638, "Dec-24": 640.0, "Jan-25": 640, "Feb-25": 1160, "Apr-25": 2099.87, "Jun-25": 1260, "Aug-25": 1100, "Aug-26": 140}, "total": 16034.87}, {"client": "Spears, Nick (Dantzler)", "type": "Residential", "active": "No", "referral": "Dantzler", "monthly": {"Sep-24": 1600, "May-26": 1750, "Aug-26": 500}, "total": 3850}, {"client": "Terry, Kit (Dantzler)", "type": "Residential", "active": "Yes", "referral": "Dantzler", "monthly": {"Feb-26": 500, "Aug-26": 500}, "total": 1000}, {"client": "Terry, Kit (Dantzler)", "type": "Residential", "active": null, "referral": "Dantzler", "monthly": {"Aug-26": 500}, "total": 500}, {"client": "Thompson (Dantzler)", "type": "Residential", "active": "No", "referral": "Dantzler", "monthly": {"Aug-25": 1687.5, "Nov-25": 1312.5, "Jan-26": 375, "Feb-26": 1312.5, "May-26": 1312.5}, "total": 6000.0}, {"client": "Wallace (Cyr)", "type": "Residential", "active": "Yes", "referral": "Cyr", "monthly": {"Dec-25": 500, "Apr-26": 500, "Aug-26": 500}, "total": 1500}, {"client": "Yang (Dantzler)", "type": "Residential", "active": "Yes", "referral": "Dantzler", "monthly": {"Jul-25": 3500, "Jan-26": 3500, "May-26": 3500, "Aug-26": 3000}, "total": 13500}, {"client": "Bennett (Dantzler)", "type": "Residential", "active": "Yes", "referral": "Dantzler", "monthly": {"Mar-26": 1612.5, "May-26": 1612.5, "Sep-26": 1612.5, "Oct-26": 1612.5}, "total": 6450.0}, {"client": "Chadwick (Generation Homes)", "type": "Residential", "active": "Yes", "referral": "Generation Homes", "monthly": {"Mar-26": 1500, "Jun-26": 1500, "Aug-26": 800}, "total": 3800}, {"client": "COEC_GBA Swing Space", "type": "Commercial", "active": "No", "referral": null, "monthly": {"Mar-26": 240}, "total": 240}, {"client": "Hayes (Dantzler)", "type": "Residential", "active": "Yes", "referral": "Dantzler", "monthly": {"Mar-26": 1850, "May-26": 1850, "Aug-26": 600, "Sep-26": 600}, "total": 4900}, {"client": "Bethany Primitive Baptist Church", "type": "Commercial", "active": "Yes", "referral": null, "monthly": {"Apr-26": 2500, "Jul-26": 13109.12, "Sep-26": 3000}, "total": 18609.12}, {"client": "COE_Furniture Commisions", "type": "Commercial", "active": "Yes", "referral": null, "monthly": {"Apr-26": 1127.62, "Nov-26": 60000}, "total": 61127.62}, {"client": "Rebekkah Heafer (Gen Homes)", "type": "Residential", "active": "Yes", "referral": "Gen Homes", "monthly": {"May-26": 2000, "Jul-26": 2000, "Aug-26": 500, "Sep-26": 500}, "total": 5000}, {"client": "Rebecca Livingston (Dantzler)", "type": "Residential", "active": "Yes", "referral": "Dantzler", "monthly": {"May-26": 1350, "Aug-26": 1350, "Sep-26": 1350, "Oct-26": 1350}, "total": 5400}, {"client": "Rose  Lickenbrock (Realtor)", "type": "Residential", "active": "Yes", "referral": "Realtor", "monthly": {"Jul-26": 4100, "Aug-26": 4100, "Sep-26": 600, "Oct-26": 600}, "total": 9400}, {"client": "Melissa Strumlauf (McKinney)", "type": "Residential", "active": "Yes", "referral": "McKinney", "monthly": {"Jun-26": 500, "Jul-26": 1975.0, "Aug-26": 500}, "total": 2975.0}, {"client": "Sheryn  Lobrano(Dantzler)", "type": "Residential", "active": "Yes", "referral": "Dantzler", "monthly": {"Jul-26": 5000}, "total": 5000}, {"client": "Parker Davis", "type": "Residential", "active": "Yes", "referral": null, "monthly": {"Aug-26": 500}, "total": 500}, {"client": "Jeff Paciolla", "type": "Residential", "active": "Yes", "referral": null, "monthly": {"Aug-26": 500}, "total": 500}, {"client": "COEC_Westbrook Christian Media Center", "type": "Commercial", "active": "Yes", "referral": null, "monthly": {"Aug-26": 500}, "total": 500}], "month_type_totals": {"Jan-24": {"Residential": 940.0}, "Feb-24": {"Residential": 1060.0}, "Mar-24": {"Commercial": 6500.0, "Residential": 4170.0}, "Apr-24": {}, "May-24": {"Commercial": 11830.0, "Residential": 2480.0}, "Jun-24": {"Residential": 850.0}, "Jul-24": {"Commercial": 270.0}, "Aug-24": {"Residential": 4792.0}, "Sep-24": {"Commercial": 1980.0, "Residential": 4488.0}, "Oct-24": {}, "Nov-24": {"Commercial": 3060.0, "Residential": 1250.0}, "Dec-24": {"Residential": 640.0}, "Jan-25": {"Commercial": 3700.0, "Residential": 640.0}, "Feb-25": {"Residential": 1160.0}, "Mar-25": {"Residential": 560.0, "Commercial": 5800.0}, "Apr-25": {"Commercial": 4650.0, "Residential": 3552.37}, "May-25": {"Commercial": 8220.0, "Residential": 1827.5}, "Jun-25": {"Residential": 4675.0}, "Jul-25": {"Furniture": 1568.58, "Residential": 5135.0, "Commercial": 1200.0}, "Aug-25": {"Furniture": 5673.56, "Residential": 7075.0}, "Sep-25": {"Furniture": 10532.69, "Residential": 2134.0}, "Oct-25": {"Residential": 1400.0, "Furniture": 2352.88}, "Nov-25": {"Furniture": 2121.54, "Residential": 5500.0}, "Dec-25": {"Residential": 1678.25, "Furniture": 3464.94, "Commercial": 6864.0}, "Jan-26": {"Residential": 7602.5, "Commercial": 9450.0}, "Feb-26": {"Residential": 6375.0}, "Mar-26": {"Commercial": 4380.0, "Residential": 8980.5}, "Apr-26": {"Commercial": 15147.619999999999, "Residential": 1300.0}, "May-26": {"Residential": 15700.0}, "Jun-26": {"Commercial": 16001.23, "Residential": 2462.0}, "Jul-26": {"Commercial": 24020.32, "Residential": 13075.0}, "Aug-26": {"Commercial": 20940.0, "Residential": 16215.0}, "Sep-26": {"Commercial": 12000.0, "Residential": 6162.5}, "Oct-26": {"Commercial": 2000.0, "Residential": 4062.5}, "Nov-26": {"Commercial": 66000.0}, "Dec-26": {"Residential": 280.0, "Commercial": 1260.0}}}
+;
+
+const brandColors = { Commercial:'#1e3a5f', Residential:'#5c7a63', Furniture:'#b8894a' };
+const fmt = n => '$' + Math.round(n).toLocaleString('en-US');
+const fmt1 = n => n.toLocaleString('en-US', {maximumFractionDigits:0});
+
+function yearMonths(yy){ return DATA.months.filter(m => m.endsWith('-'+yy)); }
+function yearTotal(yy){
+  return yearMonths(yy).reduce((s,m)=> s + Object.values(DATA.month_type_totals[m]||{}).reduce((a,b)=>a+b,0), 0);
+}
+
+// ---------- KPI ROW ----------
+const t24 = yearTotal('24'), t25 = yearTotal('25'), t26 = yearTotal('26');
+const delta2524 = t24 ? ((t25-t24)/t24*100) : 0;
+const delta2625 = t25 ? ((t26-t25)/t25*100) : 0;
+const kpis = [
+  {label:'FY2024 Actual', value: fmt(t24), delta:null},
+  {label:'FY2025 Actual', value: fmt(t25), delta: delta2524},
+  {label:'FY2026 Committed', value: fmt(t26), delta: delta2625, note:'signed + forecast'},
+  {label:'Referral-Sourced (lifetime)', value: fmt(DATA.records.filter(r=>r.referral).reduce((s,r)=>s+r.total,0)), delta:null},
+];
+document.getElementById('kpiRow').innerHTML = kpis.map(k => `
+  <div class="kpi">
+    <div class="label">${k.label}</div>
+    <div class="value mono">${k.value}</div>
+    ${k.delta!==null ? `<div class="delta ${k.delta>=0?'up':'down'}">${k.delta>=0?'▲':'▼'} ${Math.abs(k.delta).toFixed(0)}% vs prior year</div>` : (k.note? `<div class="delta">${k.note}</div>`:'')}
+  </div>
+`).join('');
+
+// ---------- YOY CHART ----------
+const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function yearSeries(yy){
+  return yearMonths(yy).map(m => Object.values(DATA.month_type_totals[m]||{}).reduce((a,b)=>a+b,0));
+}
+new Chart(document.getElementById('yoyChart'), {
+  type:'line',
+  data:{
+    labels: monthLabels,
+    datasets:[
+      {label:'2024', data:yearSeries('24'), borderColor:'#9aa5ad', backgroundColor:'transparent', borderWidth:2, tension:0.25, pointRadius:2},
+      {label:'2025', data:yearSeries('25'), borderColor:'#5c7a63', backgroundColor:'transparent', borderWidth:2, tension:0.25, pointRadius:2},
+      {label:'2026', data:yearSeries('26'), borderColor:'#b8894a', backgroundColor:'rgba(184,137,74,0.08)', borderWidth:2.5, tension:0.25, pointRadius:2, fill:true},
+    ]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ position:'top', labels:{ font:{family:'SFMono-Regular'}, boxWidth:12 } },
+      tooltip:{ callbacks:{ label: c => c.dataset.label+': '+fmt(c.parsed.y) } } },
+    scales:{
+      y:{ ticks:{ callback:v=>'$'+(v/1000)+'k', font:{family:'SFMono-Regular', size:10.5} }, grid:{ color:'rgba(30,58,95,0.08)'} },
+      x:{ ticks:{ font:{family:'SFMono-Regular', size:10.5} }, grid:{ display:false } }
+    }
+  }
+});
+
+// ---------- MIX CHART (2026 by type) ----------
+const mixTotals = {Commercial:0, Residential:0, Furniture:0};
+yearMonths('26').forEach(m => { const t=DATA.month_type_totals[m]||{}; Object.keys(mixTotals).forEach(k=> mixTotals[k]+= (t[k]||0)); });
+new Chart(document.getElementById('mixChart'), {
+  type:'doughnut',
+  data:{ labels:Object.keys(mixTotals), datasets:[{ data:Object.values(mixTotals), backgroundColor:Object.keys(mixTotals).map(k=>brandColors[k]), borderColor:'#fffdf9', borderWidth:2 }]},
+  options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{family:'SFMono-Regular'}, boxWidth:12 } },
+    tooltip:{ callbacks:{ label: c => c.label+': '+fmt(c.parsed) } } } }
+});
+
+// ---------- BREAKDOWN TABLE ----------
+const yearTabsEl = document.getElementById('yearTabs');
+['24','25','26'].forEach(yy=>{
+  const b = document.createElement('button');
+  b.textContent = '20'+yy;
+  b.className = yy==='25' ? 'active' : '';
+  b.onclick = ()=>{ document.querySelectorAll('.year-tabs button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); renderBreakdown(yy); };
+  yearTabsEl.appendChild(b);
+});
+
+function renderBreakdown(yy){
+  const months = yearMonths(yy);
+  const types = ['Commercial','Residential','Furniture'];
+  let head = '<thead><tr><th>Type</th>' + months.map(m=>`<th>${m.split('-')[0]}</th>`).join('') + '<th>Total</th></tr></thead>';
+  let body = '<tbody>';
+  const colTotals = months.map(()=>0);
+  types.forEach(ty=>{
+    let rowTotal = 0;
+    let cells = months.map((m,i)=>{
+      const v = (DATA.month_type_totals[m]||{})[ty] || 0;
+      rowTotal += v; colTotals[i]+=v;
+      return `<td>${v? fmt1(v): '—'}</td>`;
+    }).join('');
+    body += `<tr><td class="type-${ty.slice(0,4).toLowerCase()}">${ty}</td>${cells}<td><b>${fmt1(rowTotal)}</b></td></tr>`;
+  });
+  const grand = colTotals.reduce((a,b)=>a+b,0);
+  body += `<tr class="total-row"><td>Total</td>${colTotals.map(v=>`<td>${fmt1(v)}</td>`).join('')}<td>${fmt1(grand)}</td></tr>`;
+  body += '</tbody>';
+  document.getElementById('breakdownTable').innerHTML = head+body;
+}
+renderBreakdown('25');
+
+// ---------- REFERRALS ----------
+const refTotals = {};
+DATA.records.forEach(r=>{ if(r.referral){ refTotals[r.referral] = (refTotals[r.referral]||0) + r.total; } });
+const refSorted = Object.entries(refTotals).sort((a,b)=>b[1]-a[1]);
+const maxRef = refSorted.length? refSorted[0][1] : 1;
+document.getElementById('referralList').innerHTML = refSorted.map(([name,val])=>`
+  <div class="referral-bar-row">
+    <div class="name">${name}</div>
+    <div class="bar-track"><div class="bar-fill" style="width:${(val/maxRef*100).toFixed(0)}%"></div></div>
+    <div class="amt">${fmt(val)}</div>
+  </div>
+`).join('');
+
+// ---------- GANTT (2026 active-status clients) ----------
+const months26 = yearMonths('26');
+const activeRecords = DATA.records.filter(r => Object.keys(r.monthly).some(m=>m.endsWith('-26')));
+activeRecords.sort((a,b)=> {
+  const aFirst = months26.findIndex(m=>a.monthly[m]);
+  const bFirst = months26.findIndex(m=>b.monthly[m]);
+  return aFirst-bFirst;
+});
+let ganttHtml = '<div class="gantt-row header-row"><div></div>' + months26.map(m=>`<div style="text-align:center">${m.split('-')[0]}</div>`).join('') + '</div>';
+activeRecords.forEach(r=>{
+  let cells = '';
+  months26.forEach(m=>{
+    const v = r.monthly[m];
+    cells += `<div class="gantt-cell">${v? `<div class="gantt-bar ${r.type}" style="left:2px;right:2px;" title="${m}: ${fmt(v)}"></div>`:''}</div>`;
+  });
+  ganttHtml += `<div class="gantt-row"><div class="gname" title="${r.client}">${r.client}</div>${cells}</div>`;
+});
+document.getElementById('ganttWrap').innerHTML = ganttHtml;
+
+// ---------- SOW SENT (lost business) ----------
+const sow = [
+  {date:'03.18.25', name:'Marshall and Debbie Bowen', fee:6600, notes:'Requested samples of CDs; followed up 05.05.25'},
+  {date:'03.18.25', name:'Adenike Ojo', fee:3000, notes:'No response after follow-up'},
+  {date:'03.21.25', name:'Duval Finest Countertops', fee:1600, notes:'Awaiting approval'},
+  {date:'03.18.25', name:'Jimmy Wilson', fee:7000, notes:"Doesn't own home yet"},
+  {date:'04.24.25', name:'Fletcher', fee:13000, notes:'On hold'},
+  {date:'04.24.25', name:'Michaels', fee:10250, notes:'No response after follow-up'},
+  {date:'07.11.25', name:'Loehr', fee:7400, notes:'No response'},
+  {date:'07.18.25', name:'Dantzler Fleet', fee:1500, notes:''},
+  {date:'—', name:'Dantzler Herron House of Coffee', fee:20000, notes:'Budget too low for scope; revised'},
+  {date:'01.15.26', name:'Dewitt', fee:null, notes:''},
+];
+const sowTotal = sow.reduce((s,r)=>s+(r.fee||0),0);
+document.getElementById('lostTable').innerHTML = `
+  <thead><tr><th>Date</th><th>Prospect</th><th>Proposed Fee</th><th>Status</th></tr></thead>
+  <tbody>
+  ${sow.map(r=>`<tr><td class="mono">${r.date}</td><td>${r.name}</td><td>${r.fee?fmt(r.fee):'—'}</td><td><span class="status-pill">${r.notes || 'no response'}</span></td></tr>`).join('')}
+  <tr class="total-row"><td></td><td>Total Proposed, Not Converted</td><td>${fmt(sowTotal)}</td><td></td></tr>
+  </tbody>
+`;
+</script>
+</body>
+</html>
