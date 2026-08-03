@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "import:excel": "tsx scripts/import-excel.ts",
+    "setup:users": "tsx scripts/setup-users.ts",
     "gen:types": "supabase gen types typescript --project-id \"$SUPABASE_PROJECT_ID\" --schema public > src/types/database.types.ts"
   },
   "dependencies": {

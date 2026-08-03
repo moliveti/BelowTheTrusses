@@ -5,9 +5,13 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 
+type Status = "idle" | "sending" | "sent" | "error" | "verifying";
+
 export default function LoginPage() {
+  const [mode, setMode] = useState<"password" | "magic-link">("password");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error" | "verifying">("idle");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -35,6 +39,19 @@ export default function LoginPage() {
 
     return () => subscription.unsubscribe();
   }, [supabase, router]);
+
+  async function signInWithPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus("sending");
+    setError("");
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setError(error.message);
+      setStatus("error");
+    } else {
+      router.replace("/");
+    }
+  }
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
@@ -69,6 +86,51 @@ export default function LoginPage() {
           <p className="text-center text-sm text-positive">
             Check your email for a sign-in link.
           </p>
+        ) : mode === "password" ? (
+          <form onSubmit={signInWithPassword} className="flex flex-col gap-3">
+            <label className="text-xs uppercase tracking-wide text-ink/60" htmlFor="email">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="border border-line px-3 py-2 text-sm outline-none focus:border-brand-primary"
+              placeholder="you@belowthetrusses.com"
+            />
+            <label className="text-xs uppercase tracking-wide text-ink/60" htmlFor="password">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="border border-line px-3 py-2 text-sm outline-none focus:border-brand-primary"
+            />
+            <button
+              type="submit"
+              disabled={status === "sending"}
+              className="mt-2 bg-brand-primary py-2 text-sm text-white transition hover:bg-brand-primary/90 disabled:opacity-50"
+            >
+              {status === "sending" ? "Signing in…" : "Sign in"}
+            </button>
+            {status === "error" && <p className="text-xs text-warning">{error}</p>}
+            <button
+              type="button"
+              onClick={() => {
+                setMode("magic-link");
+                setStatus("idle");
+                setError("");
+              }}
+              className="mt-1 text-center text-xs text-ink/50 underline underline-offset-2"
+            >
+              Use a magic link instead
+            </button>
+          </form>
         ) : (
           <form onSubmit={sendMagicLink} className="flex flex-col gap-3">
             <label className="text-xs uppercase tracking-wide text-ink/60" htmlFor="email">
@@ -91,6 +153,17 @@ export default function LoginPage() {
               {status === "sending" ? "Sending…" : "Send magic link"}
             </button>
             {status === "error" && <p className="text-xs text-warning">{error}</p>}
+            <button
+              type="button"
+              onClick={() => {
+                setMode("password");
+                setStatus("idle");
+                setError("");
+              }}
+              className="mt-1 text-center text-xs text-ink/50 underline underline-offset-2"
+            >
+              Use a password instead
+            </button>
           </form>
         )}
       </div>
