@@ -48,8 +48,11 @@ export function Dashboard({
   const tabParam = searchParams.get("tab");
   const tab: Tab = (TAB_KEYS as string[]).includes(tabParam ?? "") ? (tabParam as Tab) : "financial";
 
-  const [mode, setMode] = useState<RevenueMode>("collected");
-  const rows = useMemo(() => (mode === "collected" ? data.collected : data.committed), [mode, data]);
+  const [mode, setMode] = useState<RevenueMode>("revenue");
+  const rows = useMemo(
+    () => (mode === "revenue" ? data.collected : [...data.collected, ...data.forecast]),
+    [mode, data]
+  );
 
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -97,6 +100,8 @@ export function Dashboard({
       {tab === "financial" && (
         <FinancialDashboardTab
           rows={rows}
+          collectedRows={data.collected}
+          forecastRows={data.forecast}
           mode={mode}
           onModeChange={setMode}
           currentYear={currentYear}

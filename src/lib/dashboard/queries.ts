@@ -25,17 +25,17 @@ function toRevenueRow(
 export async function getDashboardData(): Promise<DashboardData> {
   const supabase = await createClient();
 
-  const [milestonesRes, committedProjectsRes, referralSourcesRes, sowRes] = await Promise.all([
+  const [paidMilestonesRes, dueMilestonesRes, referralSourcesRes, sowRes] = await Promise.all([
     supabase
       .from("milestones")
       .select("paid_date, amount_paid, projects!inner(id, name, type, referral_source_id)")
       .not("paid_date", "is", null)
       .not("amount_paid", "is", null),
     supabase
-      .from("projects")
-      .select("id, name, contract_signed_date, contract_value, type, referral_source_id")
-      .not("contract_signed_date", "is", null)
-      .not("contract_value", "is", null),
+      .from("milestones")
+      .select("due_date, amount_due, amount_paid, projects!inner(id, name, type, referral_source_id)")
+      .not("due_date", "is", null)
+      .not("amount_due", "is", null),
     supabase.from("referral_sources").select("id, name, type"),
     supabase
       .from("sow_sent")
@@ -43,29 +43,34 @@ export async function getDashboardData(): Promise<DashboardData> {
       .order("date_sent", { ascending: true, nullsFirst: false }),
   ]);
 
-  if (milestonesRes.error) throw new Error(`milestones: ${milestonesRes.error.message}`);
-  if (committedProjectsRes.error) throw new Error(`projects: ${committedProjectsRes.error.message}`);
+  if (paidMilestonesRes.error) throw new Error(`milestones (paid): ${paidMilestonesRes.error.message}`);
+  if (dueMilestonesRes.error) throw new Error(`milestones (due): ${dueMilestonesRes.error.message}`);
   if (referralSourcesRes.error) throw new Error(`referral_sources: ${referralSourcesRes.error.message}`);
   if (sowRes.error) throw new Error(`sow_sent: ${sowRes.error.message}`);
 
   const collected: RevenueRow[] = [];
-  for (const m of milestonesRes.data ?? []) {
+  for (const m of paidMilestonesRes.data ?? []) {
     const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
     if (!project || !m.paid_date || m.amount_paid === null) continue;
     const row = toRevenueRow(m.paid_date, m.amount_paid, project.type, project.referral_source_id, project.id, project.name);
     if (row) collected.push(row);
   }
 
-  const committed: RevenueRow[] = [];
-  for (const p of committedProjectsRes.data ?? []) {
-    if (!p.contract_signed_date || p.contract_value === null) continue;
-    const row = toRevenueRow(p.contract_signed_date, p.contract_value, p.type, p.referral_source_id, p.id, p.name);
-    if (row) committed.push(row);
+  // Contracted but not yet paid — the gap between what's due and what's
+  // actually been collected on that milestone, bucketed by when it's due.
+  const forecast: RevenueRow[] = [];
+  for (const m of dueMilestonesRes.data ?? []) {
+    const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
+    if (!project || !m.due_date || m.amount_due === null) continue;
+    const outstanding = m.amount_due - (m.amount_paid ?? 0);
+    if (outstanding <= 0) continue;
+    const row = toRevenueRow(m.due_date, outstanding, project.type, project.referral_source_id, project.id, project.name);
+    if (row) forecast.push(row);
   }
 
   return {
     collected,
-    committed,
+    forecast,
     referralSources: referralSourcesRes.data ?? [],
     sow: (sowRes.data ?? []).map((s) => ({
       dateSent: s.date_sent,

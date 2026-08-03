@@ -2,6 +2,11 @@
 
 import type { RevenueMode } from "@/lib/dashboard/types";
 
+const LABELS: Record<RevenueMode, string> = {
+  revenue: "Revenue",
+  revenue_forecast: "Revenue + Forecast",
+};
+
 export function ModeToggle({
   mode,
   onChange,
@@ -11,7 +16,7 @@ export function ModeToggle({
 }) {
   return (
     <div className="flex gap-1">
-      {(["collected", "committed"] as RevenueMode[]).map((m) => (
+      {(["revenue", "revenue_forecast"] as RevenueMode[]).map((m) => (
         <button
           key={m}
           onClick={() => onChange(m)}
@@ -21,7 +26,7 @@ export function ModeToggle({
               : "border border-line text-ink/60 hover:border-brand-primary"
           }`}
         >
-          {m === "collected" ? "Collected" : "Committed"}
+          {LABELS[m]}
         </button>
       ))}
     </div>

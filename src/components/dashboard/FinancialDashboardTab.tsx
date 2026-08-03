@@ -10,12 +10,16 @@ import { BusinessMix, type MixPeriod } from "./BusinessMix";
 
 export function FinancialDashboardTab({
   rows,
+  collectedRows,
+  forecastRows,
   mode,
   onModeChange,
   currentYear,
   currentMonth,
 }: {
   rows: RevenueRow[];
+  collectedRows: RevenueRow[];
+  forecastRows: RevenueRow[];
   mode: RevenueMode;
   onModeChange: (mode: RevenueMode) => void;
   currentYear: number;
@@ -41,10 +45,15 @@ export function FinancialDashboardTab({
         <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
           <h2 className="text-lg font-normal">Year-over-Year Revenue</h2>
           <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">
-            {mode === "collected" ? "Cash Collected" : "Signed & Committed"}
+            {mode === "revenue" ? "Cash Collected" : "Revenue + Forecast"}
           </span>
         </div>
-        <YoyChart rows={rows} currentYear={currentYear} />
+        <YoyChart
+          collectedRows={collectedRows}
+          forecastRows={forecastRows}
+          showForecast={mode === "revenue_forecast"}
+          currentYear={currentYear}
+        />
       </section>
 
       <section className="mb-12">

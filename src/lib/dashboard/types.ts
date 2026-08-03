@@ -26,9 +26,10 @@ export interface SowRow {
 
 export interface DashboardData {
   collected: RevenueRow[];
-  committed: RevenueRow[];
+  /** Contracted but not yet paid: milestones due (amount_due > amount_paid), by due-date month. */
+  forecast: RevenueRow[];
   referralSources: ReferralSource[];
   sow: SowRow[];
 }
 
-export type RevenueMode = "collected" | "committed";
+export type RevenueMode = "revenue" | "revenue_forecast";
