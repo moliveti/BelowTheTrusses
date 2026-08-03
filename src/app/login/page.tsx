@@ -1,19 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error" | "verifying">("idle");
   const [error, setError] = useState("");
+  const supabase = useMemo(() => createClient(), []);
+  const router = useRouter();
+
+  // Supabase's default (non-custom-SMTP) magic-link email redirects here
+  // with the session in the URL hash (#access_token=...). The browser
+  // client auto-detects and persists it to cookies on load — once that
+  // happens, send the user on to the dashboard.
+  useEffect(() => {
+    if (window.location.hash.includes("access_token")) {
+      setStatus("verifying");
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        router.replace("/");
+      }
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace("/");
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase, router]);
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setStatus("sending");
     setError("");
-    const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: `${window.location.origin}/` },
@@ -37,7 +63,9 @@ export default function LoginPage() {
           <p className="text-center text-xs text-ink/60">Forecast &amp; Business Intelligence</p>
         </div>
 
-        {status === "sent" ? (
+        {status === "verifying" ? (
+          <p className="text-center text-sm text-ink/60">Signing you in…</p>
+        ) : status === "sent" ? (
           <p className="text-center text-sm text-positive">
             Check your email for a sign-in link.
           </p>
