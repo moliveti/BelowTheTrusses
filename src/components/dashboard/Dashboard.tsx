@@ -3,19 +3,37 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import type { DashboardData, RevenueMode } from "@/lib/dashboard/types";
+import type { ProjectOption, SubcontractorOption, TimeEntry } from "@/lib/hours/types";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
+import { ContractedWorkTab } from "./ContractedWorkTab";
 
-type Tab = "financial" | "referrals" | "sow";
+type Tab = "financial" | "referrals" | "sow" | "contracted";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "financial", label: "Financial Dashboard" },
   { key: "referrals", label: "Referral Sources" },
+  { key: "contracted", label: "Contracted Work" },
   { key: "sow", label: "SOW Sent" },
 ];
 
-export function Dashboard({ data, userEmail }: { data: DashboardData; userEmail: string | undefined }) {
+interface ContractedWorkData {
+  timeEntries: TimeEntry[];
+  subcontractors: SubcontractorOption[];
+  activeProjects: ProjectOption[];
+  assignments: { projectId: string; subcontractorId: string }[];
+}
+
+export function Dashboard({
+  data,
+  userEmail,
+  contractedWork,
+}: {
+  data: DashboardData;
+  userEmail: string | undefined;
+  contractedWork: ContractedWorkData;
+}) {
   const [tab, setTab] = useState<Tab>("financial");
   const [mode, setMode] = useState<RevenueMode>("collected");
   const rows = useMemo(() => (mode === "collected" ? data.collected : data.committed), [mode, data]);
@@ -63,6 +81,14 @@ export function Dashboard({ data, userEmail }: { data: DashboardData; userEmail:
       )}
       {tab === "referrals" && (
         <ReferralsTab rows={rows} referralSources={data.referralSources} mode={mode} onModeChange={setMode} />
+      )}
+      {tab === "contracted" && (
+        <ContractedWorkTab
+          entries={contractedWork.timeEntries}
+          subcontractors={contractedWork.subcontractors}
+          activeProjects={contractedWork.activeProjects}
+          initialAssignments={contractedWork.assignments}
+        />
       )}
       {tab === "sow" && <SowTab rows={data.sow} />}
     </main>
