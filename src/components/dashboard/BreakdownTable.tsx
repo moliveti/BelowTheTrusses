@@ -18,6 +18,16 @@ type Category = ProjectType | "total";
 export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
   const years = distinctYears(rows);
   const [category, setCategory] = useState<Category>("total");
+  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set());
+
+  function toggleYear(y: number) {
+    setExpandedYears((prev) => {
+      const next = new Set(prev);
+      if (next.has(y)) next.delete(y);
+      else next.add(y);
+      return next;
+    });
+  }
 
   if (years.length === 0) {
     return <div className="border border-line bg-surface p-5 text-sm text-ink/50">No data yet.</div>;
@@ -68,34 +78,20 @@ export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
             {category === "total"
               ? years.map((y) => {
                   const byType = monthlyByTypeForYear(rows, y);
-                  const colTotals = new Array(12).fill(0);
+                  const colTotals = monthlyTotalsForYear(rows, y);
+                  const isOpen = expandedYears.has(y);
                   return (
                     <Fragment key={y}>
-                      <tr className="bg-canvas">
-                        <td colSpan={14} className="px-3 py-2 font-mono text-xs font-bold text-ink">
+                      <tr
+                        onClick={() => toggleYear(y)}
+                        className="cursor-pointer border-b-[1.5px] border-ink font-bold hover:bg-canvas"
+                      >
+                        <td className="px-3 py-2.5 text-left">
+                          <span className="mr-1.5 inline-block w-3 font-mono text-[10px] text-ink/50">
+                            {isOpen ? "▼" : "▶"}
+                          </span>
                           {y}
                         </td>
-                      </tr>
-                      {PROJECT_TYPES.map((type) => {
-                        const monthly = byType[type];
-                        monthly.forEach((v, i) => (colTotals[i] += v));
-                        const rowTotal = monthly.reduce((a, b) => a + b, 0);
-                        return (
-                          <tr key={type} className="border-b border-line hover:bg-canvas">
-                            <td className={`px-3 py-2.5 pl-6 text-left font-mono text-[11px] ${TYPE_CLASS[type]}`}>
-                              {type}
-                            </td>
-                            {monthly.map((v, i) => (
-                              <td key={i} className="px-3 py-2.5 text-right tabular-nums">
-                                {fmt1(v)}
-                              </td>
-                            ))}
-                            <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmt1(rowTotal)}</td>
-                          </tr>
-                        );
-                      })}
-                      <tr className="border-b-[1.5px] border-ink font-bold">
-                        <td className="px-3 py-2.5 text-left">Total {y}</td>
                         {colTotals.map((v, i) => (
                           <td key={i} className="px-3 py-2.5 text-right tabular-nums">
                             {fmt1(v)}
@@ -105,6 +101,24 @@ export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
                           {fmt1(colTotals.reduce((a, b) => a + b, 0))}
                         </td>
                       </tr>
+                      {isOpen &&
+                        PROJECT_TYPES.map((type) => {
+                          const monthly = byType[type];
+                          const rowTotal = monthly.reduce((a, b) => a + b, 0);
+                          return (
+                            <tr key={type} className="border-b border-line hover:bg-canvas">
+                              <td className={`px-3 py-2.5 pl-8 text-left font-mono text-[11px] ${TYPE_CLASS[type]}`}>
+                                {type}
+                              </td>
+                              {monthly.map((v, i) => (
+                                <td key={i} className="px-3 py-2.5 text-right tabular-nums">
+                                  {fmt1(v)}
+                                </td>
+                              ))}
+                              <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmt1(rowTotal)}</td>
+                            </tr>
+                          );
+                        })}
                     </Fragment>
                   );
                 })

@@ -8,6 +8,7 @@ import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
 import { ContractedWorkTab } from "./ContractedWorkTab";
+import { SignOutButton } from "@/components/SignOutButton";
 
 type Tab = "financial" | "referrals" | "sow" | "contracted";
 
@@ -44,14 +45,17 @@ export function Dashboard({
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 md:px-10">
-      <header className="mb-6 flex items-center gap-4 border-b border-line pb-6">
-        <Image src="/logo.png" alt="Below the Trusses" width={44} height={44} />
-        <div>
-          <h1 className="text-lg text-ink">
-            Below the <em className="font-normal not-italic text-brand-accent">Trusses</em>
-          </h1>
-          <p className="text-xs text-ink/60">{userEmail}</p>
+      <header className="mb-6 flex items-center justify-between gap-4 border-b border-line pb-6">
+        <div className="flex items-center gap-4">
+          <Image src="/logo.png" alt="Below the Trusses" width={44} height={44} />
+          <div>
+            <h1 className="text-lg text-ink">
+              Below the <em className="font-normal not-italic text-brand-accent">Trusses</em>
+            </h1>
+            <p className="text-xs text-ink/60">{userEmail}</p>
+          </div>
         </div>
+        <SignOutButton />
       </header>
 
       <nav className="mb-10 flex gap-1 border-b border-line">
