@@ -16,7 +16,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "financial", label: "Financial Dashboard" },
   { key: "referrals", label: "Referral Sources" },
   { key: "contracted", label: "Contracted Work" },
-  { key: "sow", label: "SOW Sent" },
+  { key: "sow", label: "Business Not Materialized" },
 ];
 
 interface ContractedWorkData {

@@ -45,7 +45,7 @@ export function SowTab({ rows }: { rows: SowRow[] }) {
   return (
     <div>
       <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
-        <h2 className="text-lg font-normal">SOW Sent — Did Not Materialize</h2>
+        <h2 className="text-lg font-normal">Business Not Materialized</h2>
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">By Year, for Win-Rate Context</span>
       </div>
 
