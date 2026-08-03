@@ -1,11 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import type { RevenueMode, RevenueRow } from "@/lib/dashboard/types";
 import { ModeToggle } from "./ModeToggle";
 import { KpiRow } from "./KpiRow";
 import { YoyChart } from "./YoyChart";
 import { BreakdownTable } from "./BreakdownTable";
-import { BusinessMix } from "./BusinessMix";
+import { BusinessMix, type MixPeriod } from "./BusinessMix";
 
 export function FinancialDashboardTab({
   rows,
@@ -20,6 +21,12 @@ export function FinancialDashboardTab({
   currentYear: number;
   currentMonth: number;
 }) {
+  const [mixPeriod, setMixPeriod] = useState<MixPeriod>("ytd");
+
+  function handleYearClick(year: number) {
+    setMixPeriod(year === currentYear ? "ytd" : year);
+  }
+
   return (
     <div>
       <div className="mb-8 flex items-center justify-end">
@@ -44,14 +51,20 @@ export function FinancialDashboardTab({
         <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
           <h2 className="text-lg font-normal">Monthly Breakdown</h2>
         </div>
-        <BreakdownTable rows={rows} />
+        <BreakdownTable rows={rows} onYearClick={handleYearClick} />
       </section>
 
       <section>
         <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
           <h2 className="text-lg font-normal">Business Mix</h2>
         </div>
-        <BusinessMix rows={rows} currentYear={currentYear} currentMonth={currentMonth} />
+        <BusinessMix
+          rows={rows}
+          currentYear={currentYear}
+          currentMonth={currentMonth}
+          period={mixPeriod}
+          onPeriodChange={setMixPeriod}
+        />
       </section>
     </div>
   );

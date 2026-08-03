@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
 import type { RevenueRow } from "@/lib/dashboard/types";
@@ -15,19 +14,22 @@ const BRAND_COLORS: Record<string, string> = {
   Furniture: "#b8894a",
 };
 
-type Period = "ytd" | "all" | number;
+export type MixPeriod = "ytd" | "all" | number;
 
 export function BusinessMix({
   rows,
   currentYear,
   currentMonth,
+  period,
+  onPeriodChange,
 }: {
   rows: RevenueRow[];
   currentYear: number;
   currentMonth: number;
+  period: MixPeriod;
+  onPeriodChange: (period: MixPeriod) => void;
 }) {
   const years = distinctYears(rows);
-  const [period, setPeriod] = useState<Period>("ytd");
 
   const totals =
     period === "ytd"
@@ -43,7 +45,7 @@ export function BusinessMix({
     <div>
       <div className="mb-4 flex flex-wrap gap-1">
         <button
-          onClick={() => setPeriod("ytd")}
+          onClick={() => onPeriodChange("ytd")}
           className={`px-3 py-1.5 font-mono text-xs uppercase tracking-wide ${period === "ytd" ? "bg-brand-primary text-white" : "border border-ink text-ink"}`}
         >
           YTD
@@ -53,14 +55,14 @@ export function BusinessMix({
           .map((y) => (
             <button
               key={y}
-              onClick={() => setPeriod(y)}
+              onClick={() => onPeriodChange(y)}
               className={`px-3 py-1.5 font-mono text-xs uppercase tracking-wide ${period === y ? "bg-brand-primary text-white" : "border border-ink text-ink"}`}
             >
               {y}
             </button>
           ))}
         <button
-          onClick={() => setPeriod("all")}
+          onClick={() => onPeriodChange("all")}
           className={`px-3 py-1.5 font-mono text-xs uppercase tracking-wide ${period === "all" ? "bg-brand-primary text-white" : "border border-ink text-ink"}`}
         >
           All-time

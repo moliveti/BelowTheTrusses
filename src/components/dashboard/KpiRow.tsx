@@ -19,15 +19,21 @@ export function KpiRow({ rows, currentYear }: { rows: RevenueRow[]; currentYear:
       label: `FY${year} ${isCurrent ? "(YTD)" : "Actual"}`,
       value: fmtUsd(total),
       delta,
+      isCurrent,
     };
   });
 
-  cards.push({ label: "Referral-Sourced (lifetime)", value: fmtUsd(referralTotal), delta: null });
+  cards.push({ label: "Referral-Sourced (lifetime)", value: fmtUsd(referralTotal), delta: null, isCurrent: false });
 
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
       {cards.map((k) => (
-        <div key={k.label} className="border border-line border-t-2 border-t-brand-accent bg-surface p-5">
+        <div
+          key={k.label}
+          className={`border border-t-2 border-t-brand-accent bg-surface p-5 ${
+            k.isCurrent ? "border-brand-accent/40 bg-brand-accent/5" : "border-line"
+          }`}
+        >
           <div className="mb-2 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{k.label}</div>
           <div className="font-mono text-xl tabular-nums text-ink">{k.value}</div>
           {k.delta !== null && (

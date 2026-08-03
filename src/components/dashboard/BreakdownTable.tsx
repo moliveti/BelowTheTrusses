@@ -13,6 +13,7 @@ import {
 import { MONTH_LABELS } from "@/lib/dashboard/format";
 
 const fmt1 = (n: number) => (n ? Math.round(n).toLocaleString("en-US") : "—");
+const fmtPct = (value: number, base: number) => (base > 0 && value !== 0 ? `${((value / base) * 100).toFixed(1)}%` : "—");
 
 const TYPE_CLASS: Record<string, string> = {
   Residential: "text-[var(--positive)]",
@@ -22,13 +23,15 @@ const TYPE_CLASS: Record<string, string> = {
 
 type Category = ProjectType | "total";
 
-export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
+export function BreakdownTable({ rows, onYearClick }: { rows: RevenueRow[]; onYearClick?: (year: number) => void }) {
   const years = distinctYears(rows);
   const [category, setCategory] = useState<Category>("total");
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set());
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+  const [showPercent, setShowPercent] = useState(false);
 
   function toggleYear(y: number) {
+    onYearClick?.(y);
     setExpandedYears((prev) => {
       const next = new Set(prev);
       if (next.has(y)) next.delete(y);
@@ -52,26 +55,46 @@ export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap gap-1">
-        {PROJECT_TYPES.map((t) => (
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          {PROJECT_TYPES.map((t) => (
+            <button
+              key={t}
+              onClick={() => setCategory(t)}
+              className={`px-4 py-1.5 font-mono text-xs uppercase tracking-wide ${
+                category === t ? "bg-brand-primary text-white" : "border border-ink text-ink hover:bg-canvas"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
           <button
-            key={t}
-            onClick={() => setCategory(t)}
-            className={`px-4 py-1.5 font-mono text-xs uppercase tracking-wide ${
-              category === t ? "bg-brand-primary text-white" : "border border-ink text-ink hover:bg-canvas"
+            onClick={() => setCategory("total")}
+            className={`px-4 py-1.5 font-mono text-xs font-bold uppercase tracking-wide ${
+              category === "total" ? "bg-brand-primary text-white" : "border border-ink text-ink hover:bg-canvas"
             }`}
           >
-            {t}
+            Total by Category
           </button>
-        ))}
-        <button
-          onClick={() => setCategory("total")}
-          className={`px-4 py-1.5 font-mono text-xs font-bold uppercase tracking-wide ${
-            category === "total" ? "bg-brand-primary text-white" : "border border-ink text-ink hover:bg-canvas"
-          }`}
-        >
-          Total by Category
-        </button>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={() => setShowPercent(false)}
+            className={`px-3 py-1.5 font-mono text-xs uppercase tracking-wide ${
+              !showPercent ? "bg-ink text-white" : "border border-ink text-ink hover:bg-canvas"
+            }`}
+          >
+            $
+          </button>
+          <button
+            onClick={() => setShowPercent(true)}
+            className={`px-3 py-1.5 font-mono text-xs uppercase tracking-wide ${
+              showPercent ? "bg-ink text-white" : "border border-ink text-ink hover:bg-canvas"
+            }`}
+          >
+            %
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto border border-line bg-surface">
@@ -96,6 +119,7 @@ export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
               ? years.map((y) => {
                   const byType = monthlyByTypeForYear(rows, y);
                   const colTotals = monthlyTotalsForYear(rows, y);
+                  const yearGrandTotal = colTotals.reduce((a, b) => a + b, 0);
                   const isOpen = expandedYears.has(y);
                   return (
                     <Fragment key={y}>
@@ -111,11 +135,11 @@ export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
                         </td>
                         {colTotals.map((v, i) => (
                           <td key={i} className="px-3 py-2.5 text-right tabular-nums">
-                            {fmt1(v)}
+                            {showPercent ? fmtPct(v, yearGrandTotal) : fmt1(v)}
                           </td>
                         ))}
                         <td className="px-3 py-2.5 text-right tabular-nums">
-                          {fmt1(colTotals.reduce((a, b) => a + b, 0))}
+                          {showPercent ? "100.0%" : fmt1(yearGrandTotal)}
                         </td>
                       </tr>
                       {isOpen &&
@@ -141,10 +165,12 @@ export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
                                 </td>
                                 {monthly.map((v, i) => (
                                   <td key={i} className="px-3 py-2.5 text-right tabular-nums">
-                                    {fmt1(v)}
+                                    {showPercent ? fmtPct(v, colTotals[i]) : fmt1(v)}
                                   </td>
                                 ))}
-                                <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmt1(rowTotal)}</td>
+                                <td className="px-3 py-2.5 text-right font-bold tabular-nums">
+                                  {showPercent ? fmtPct(rowTotal, yearGrandTotal) : fmt1(rowTotal)}
+                                </td>
                               </tr>
                               {typeOpen &&
                                 projectRows.map((p) => (
@@ -184,10 +210,12 @@ export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
                       <td className="px-3 py-2.5 text-left">{y}</td>
                       {monthly.map((v, i) => (
                         <td key={i} className="px-3 py-2.5 text-right tabular-nums">
-                          {fmt1(v)}
+                          {showPercent ? fmtPct(v, total) : fmt1(v)}
                         </td>
                       ))}
-                      <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmt1(total)}</td>
+                      <td className="px-3 py-2.5 text-right font-bold tabular-nums">
+                        {showPercent ? "100.0%" : fmt1(total)}
+                      </td>
                     </tr>
                   );
                 })}
