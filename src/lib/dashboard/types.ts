@@ -6,6 +6,8 @@ export interface RevenueRow {
   type: ProjectType;
   amount: number;
   referralSourceId: string | null;
+  projectId: string;
+  projectName: string;
 }
 
 export interface ReferralSource {

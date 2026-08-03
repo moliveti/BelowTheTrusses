@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import type { DashboardData, RevenueMode } from "@/lib/dashboard/types";
 import type { Assignment, ProjectOption, SubcontractorOption, TimeEntry } from "@/lib/hours/types";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
@@ -55,7 +56,15 @@ export function Dashboard({
             <p className="text-xs text-ink/60">{userEmail}</p>
           </div>
         </div>
-        <SignOutButton />
+        <div className="flex items-center gap-4">
+          <Link
+            href="/projects"
+            className="font-mono text-xs uppercase tracking-wide text-ink/50 underline underline-offset-2 hover:text-ink"
+          >
+            Projects
+          </Link>
+          <SignOutButton />
+        </div>
       </header>
 
       <nav className="mb-10 flex gap-1 border-b border-line">

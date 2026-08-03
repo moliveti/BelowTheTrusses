@@ -59,6 +59,36 @@ export function allTimeTotalsByType(rows: RevenueRow[]): Record<ProjectType, num
   return result;
 }
 
+export interface ProjectMonthlyTotal {
+  projectId: string;
+  projectName: string;
+  monthly: number[];
+  total: number;
+}
+
+export function projectTotalsForYearAndType(
+  rows: RevenueRow[],
+  year: number,
+  type: ProjectType
+): ProjectMonthlyTotal[] {
+  const byProject = new Map<string, ProjectMonthlyTotal>();
+  for (const r of rows) {
+    if (r.year !== year || r.type !== type) continue;
+    if (!byProject.has(r.projectId)) {
+      byProject.set(r.projectId, {
+        projectId: r.projectId,
+        projectName: r.projectName,
+        monthly: new Array(12).fill(0),
+        total: 0,
+      });
+    }
+    const entry = byProject.get(r.projectId)!;
+    entry.monthly[r.month - 1] += r.amount;
+    entry.total += r.amount;
+  }
+  return Array.from(byProject.values()).sort((a, b) => b.total - a.total);
+}
+
 export interface ReferralTotal {
   id: string;
   name: string;

@@ -1,7 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import type { DashboardData, ProjectType, RevenueRow } from "./types";
 
-function toRevenueRow(dateStr: string, amount: number, type: string, referralSourceId: string | null): RevenueRow | null {
+function toRevenueRow(
+  dateStr: string,
+  amount: number,
+  type: string,
+  referralSourceId: string | null,
+  projectId: string,
+  projectName: string
+): RevenueRow | null {
   if (!amount) return null;
   const d = new Date(dateStr);
   return {
@@ -10,6 +17,8 @@ function toRevenueRow(dateStr: string, amount: number, type: string, referralSou
     type: type as ProjectType,
     amount,
     referralSourceId,
+    projectId,
+    projectName,
   };
 }
 
@@ -19,12 +28,12 @@ export async function getDashboardData(): Promise<DashboardData> {
   const [milestonesRes, committedProjectsRes, referralSourcesRes, sowRes] = await Promise.all([
     supabase
       .from("milestones")
-      .select("paid_date, amount_paid, projects!inner(type, referral_source_id)")
+      .select("paid_date, amount_paid, projects!inner(id, name, type, referral_source_id)")
       .not("paid_date", "is", null)
       .not("amount_paid", "is", null),
     supabase
       .from("projects")
-      .select("contract_signed_date, contract_value, type, referral_source_id")
+      .select("id, name, contract_signed_date, contract_value, type, referral_source_id")
       .not("contract_signed_date", "is", null)
       .not("contract_value", "is", null),
     supabase.from("referral_sources").select("id, name, type"),
@@ -43,14 +52,14 @@ export async function getDashboardData(): Promise<DashboardData> {
   for (const m of milestonesRes.data ?? []) {
     const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
     if (!project || !m.paid_date || m.amount_paid === null) continue;
-    const row = toRevenueRow(m.paid_date, m.amount_paid, project.type, project.referral_source_id);
+    const row = toRevenueRow(m.paid_date, m.amount_paid, project.type, project.referral_source_id, project.id, project.name);
     if (row) collected.push(row);
   }
 
   const committed: RevenueRow[] = [];
   for (const p of committedProjectsRes.data ?? []) {
     if (!p.contract_signed_date || p.contract_value === null) continue;
-    const row = toRevenueRow(p.contract_signed_date, p.contract_value, p.type, p.referral_source_id);
+    const row = toRevenueRow(p.contract_signed_date, p.contract_value, p.type, p.referral_source_id, p.id, p.name);
     if (row) committed.push(row);
   }
 

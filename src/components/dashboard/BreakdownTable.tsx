@@ -1,8 +1,15 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import Link from "next/link";
 import type { ProjectType, RevenueRow } from "@/lib/dashboard/types";
-import { PROJECT_TYPES, distinctYears, monthlyByTypeForYear, monthlyTotalsForYear } from "@/lib/dashboard/aggregate";
+import {
+  PROJECT_TYPES,
+  distinctYears,
+  monthlyByTypeForYear,
+  monthlyTotalsForYear,
+  projectTotalsForYearAndType,
+} from "@/lib/dashboard/aggregate";
 import { MONTH_LABELS } from "@/lib/dashboard/format";
 
 const fmt1 = (n: number) => (n ? Math.round(n).toLocaleString("en-US") : "—");
@@ -19,12 +26,22 @@ export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
   const years = distinctYears(rows);
   const [category, setCategory] = useState<Category>("total");
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set());
+  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
 
   function toggleYear(y: number) {
     setExpandedYears((prev) => {
       const next = new Set(prev);
       if (next.has(y)) next.delete(y);
       else next.add(y);
+      return next;
+    });
+  }
+
+  function toggleType(key: string) {
+    setExpandedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -105,18 +122,52 @@ export function BreakdownTable({ rows }: { rows: RevenueRow[] }) {
                         PROJECT_TYPES.map((type) => {
                           const monthly = byType[type];
                           const rowTotal = monthly.reduce((a, b) => a + b, 0);
+                          const typeKey = `${y}::${type}`;
+                          const typeOpen = expandedTypes.has(typeKey);
+                          const projectRows = typeOpen ? projectTotalsForYearAndType(rows, y, type) : [];
                           return (
-                            <tr key={type} className="border-b border-line hover:bg-canvas">
-                              <td className={`px-3 py-2.5 pl-8 text-left font-mono text-[11px] ${TYPE_CLASS[type]}`}>
-                                {type}
-                              </td>
-                              {monthly.map((v, i) => (
-                                <td key={i} className="px-3 py-2.5 text-right tabular-nums">
-                                  {fmt1(v)}
+                            <Fragment key={type}>
+                              <tr
+                                onClick={() => rowTotal > 0 && toggleType(typeKey)}
+                                className={`border-b border-line hover:bg-canvas ${rowTotal > 0 ? "cursor-pointer" : ""}`}
+                              >
+                                <td className={`px-3 py-2.5 pl-8 text-left font-mono text-[11px] ${TYPE_CLASS[type]}`}>
+                                  {rowTotal > 0 && (
+                                    <span className="mr-1.5 inline-block w-3 text-[10px] text-ink/40">
+                                      {typeOpen ? "▼" : "▶"}
+                                    </span>
+                                  )}
+                                  {type}
                                 </td>
-                              ))}
-                              <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmt1(rowTotal)}</td>
-                            </tr>
+                                {monthly.map((v, i) => (
+                                  <td key={i} className="px-3 py-2.5 text-right tabular-nums">
+                                    {fmt1(v)}
+                                  </td>
+                                ))}
+                                <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmt1(rowTotal)}</td>
+                              </tr>
+                              {typeOpen &&
+                                projectRows.map((p) => (
+                                  <tr key={p.projectId} className="border-b border-line bg-canvas/40 hover:bg-canvas">
+                                    <td className="px-3 py-2 pl-14 text-left text-[12px]">
+                                      <Link
+                                        href={`/projects/${p.projectId}`}
+                                        className="text-ink/70 underline decoration-line underline-offset-2 hover:text-brand-primary"
+                                      >
+                                        {p.projectName}
+                                      </Link>
+                                    </td>
+                                    {p.monthly.map((v, i) => (
+                                      <td key={i} className="px-3 py-2 text-right text-[12px] tabular-nums text-ink/70">
+                                        {fmt1(v)}
+                                      </td>
+                                    ))}
+                                    <td className="px-3 py-2 text-right text-[12px] tabular-nums text-ink/70">
+                                      {fmt1(p.total)}
+                                    </td>
+                                  </tr>
+                                ))}
+                            </Fragment>
                           );
                         })}
                     </Fragment>
