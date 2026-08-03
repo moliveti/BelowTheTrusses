@@ -80,7 +80,6 @@ export function ContractedWorkTab({
         <ManualEntryForm
           subcontractors={subcontractors}
           activeProjects={activeProjects}
-          assignments={assignments}
           onAdded={(entry) => setEntries((prev) => [entry, ...prev])}
         />
       </section>
@@ -248,12 +247,10 @@ function CostByProject({ rows }: { rows: ReturnType<typeof buildCostRows> }) {
 function ManualEntryForm({
   subcontractors,
   activeProjects,
-  assignments,
   onAdded,
 }: {
   subcontractors: SubcontractorOption[];
   activeProjects: ProjectOption[];
-  assignments: Assignment[];
   onAdded: (entry: TimeEntry) => void;
 }) {
   const [subcontractorId, setSubcontractorId] = useState(subcontractors[0]?.id ?? "");
@@ -264,17 +261,12 @@ function ManualEntryForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const assignedProjectIds = new Set(
-    assignments.filter((a) => a.subcontractorId === subcontractorId).map((a) => a.projectId)
-  );
-  const availableProjects = activeProjects.filter((p) => assignedProjectIds.has(p.id));
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     const hoursNum = Number(hours);
     if (!subcontractorId) return setError("Pick a subcontractor.");
-    if (!projectId) return setError("Pick a project (must be assigned first).");
+    if (!projectId) return setError("Pick a project.");
     if (!hoursNum || hoursNum <= 0 || hoursNum > 24 || Math.round(hoursNum * 4) !== hoursNum * 4) {
       return setError("Hours must be in 15-minute increments (e.g. 1.25, 3.5).");
     }
@@ -343,7 +335,7 @@ function ManualEntryForm({
           className="w-full border border-line px-2 py-1.5 text-xs"
         >
           <option value="">Select…</option>
-          {availableProjects.map((p) => (
+          {activeProjects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
