@@ -27,3 +27,6 @@ next-env.d.ts
 
 # local tooling config
 .claude/
+
+# generated data exports (contain a snapshot of business data — not source)
+/BTT_Data_Audit.xlsx
