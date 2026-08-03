@@ -10,15 +10,17 @@ import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
 import { ContractedWorkTab } from "./ContractedWorkTab";
+import { ProductivityTab } from "./ProductivityTab";
 import { ProjectsIndex } from "@/components/projects/ProjectsIndex";
 import { SignOutButton } from "@/components/SignOutButton";
 
-type Tab = "financial" | "referrals" | "contracted" | "projects" | "sow";
+type Tab = "financial" | "referrals" | "contracted" | "productivity" | "projects" | "sow";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "financial", label: "Financial Dashboard" },
   { key: "referrals", label: "Referral Sources" },
   { key: "contracted", label: "Contracted Work" },
+  { key: "productivity", label: "Productivity" },
   { key: "projects", label: "Projects" },
   { key: "sow", label: "Business Not Materialized" },
 ];
@@ -118,6 +120,9 @@ export function Dashboard({
           activeProjects={contractedWork.activeProjects}
           initialAssignments={contractedWork.assignments}
         />
+      )}
+      {tab === "productivity" && (
+        <ProductivityTab entries={contractedWork.timeEntries} assignments={contractedWork.assignments} />
       )}
       {tab === "projects" && <ProjectsIndex projects={projects} />}
       {tab === "sow" && <SowTab rows={data.sow} />}

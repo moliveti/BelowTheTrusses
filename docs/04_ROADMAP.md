@@ -56,6 +56,14 @@ tagging can happen gradually without blocking anything.
 - **Profitability reporting.** Once rates + hours + costs are tracked (done) and forecasting exists
   (above), surface actual project margin — revenue vs. (subcontractor cost + Amy's QA time cost) —
   to inform better quoting and subcontracting decisions over time.
+- **Gantt chart.** Needs real start/target completion dates on projects first (Phase 2 intake work);
+  the prototype's version approximated bars from billing months, which the owner doesn't want
+  carried forward once real dates exist.
+- **Hours burn-down.** Projected vs. actual hours per project, once the intake form captures a
+  total-hours estimate. Owner's framing (2026-08-03): capture *total* hours at intake, then a
+  separate editable field for how many of those hours are subcontracted — that split is often
+  decided after intake, not during, so it needs to stay editable post-intake rather than locked in
+  at project creation.
 
 ## Ongoing / Not Scheduled
 - Client-facing portal, file storage, task management — explicitly out of scope per PRD section 7,
