@@ -33,7 +33,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 Dashboard
               </Link>{" "}
               /{" "}
-              <Link href="/projects" className="underline underline-offset-2 hover:text-brand-primary">
+              <Link href="/?tab=projects" className="underline underline-offset-2 hover:text-brand-primary">
                 Projects
               </Link>{" "}
               / {project.name}
