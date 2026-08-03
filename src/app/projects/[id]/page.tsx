@@ -64,7 +64,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <section className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Total Original Proposal" value={project.contractValue !== null ? fmtUsd(project.contractValue) : "—"} />
         <Stat label="Total Collected" value={fmtUsd(project.totalCollected)} />
-        <Stat label="Total Contracted Cost" value={fmtUsd(project.totalCost)} flag={project.hasUnknownRate} />
+        <Stat
+          label="Total Contracted Cost"
+          value={project.hoursByPerson.length === 0 ? "—" : fmtUsd(project.totalCost)}
+          flag={project.hasUnknownRate}
+        />
         <Stat label="Profitability" value={fmtUsd(profitability)} accent={profitability >= 0 ? "positive" : "warning"} />
       </section>
 
