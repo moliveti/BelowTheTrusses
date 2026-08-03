@@ -4,6 +4,12 @@ export interface ProjectListItem {
   clientName: string;
   type: string;
   active: boolean;
+  hours: number;
+  totalCost: number;
+  hasUnknownRate: boolean;
+  plannedRevenue: number | null;
+  amountPaid: number;
+  outstandingBalance: number;
 }
 
 export interface ScopeTagAmount {

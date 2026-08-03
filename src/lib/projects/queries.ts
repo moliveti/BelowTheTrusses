@@ -3,20 +3,58 @@ import type { ProjectDetail, ProjectListItem } from "./types";
 
 export async function getProjectsIndex(): Promise<ProjectListItem[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("projects")
-    .select("id, name, type, active, clients(name)")
-    .order("name");
-  if (error) throw new Error(`projects: ${error.message}`);
 
-  return (data ?? []).map((p) => {
+  const [projectsRes, milestonesRes, timeEntriesRes, assignmentsRes] = await Promise.all([
+    supabase.from("projects").select("id, name, type, active, contract_value, clients(name)").order("name"),
+    supabase.from("milestones").select("project_id, amount_due, amount_paid"),
+    supabase.from("subcontractor_time_entries").select("project_id, subcontractor_id, hours"),
+    supabase.from("project_subcontractors").select("project_id, subcontractor_id, hourly_rate"),
+  ]);
+
+  if (projectsRes.error) throw new Error(`projects: ${projectsRes.error.message}`);
+  if (milestonesRes.error) throw new Error(`milestones: ${milestonesRes.error.message}`);
+  if (timeEntriesRes.error) throw new Error(`subcontractor_time_entries: ${timeEntriesRes.error.message}`);
+  if (assignmentsRes.error) throw new Error(`project_subcontractors: ${assignmentsRes.error.message}`);
+
+  const billingByProject = new Map<string, { amountDue: number; amountPaid: number }>();
+  for (const m of milestonesRes.data ?? []) {
+    if (!billingByProject.has(m.project_id)) billingByProject.set(m.project_id, { amountDue: 0, amountPaid: 0 });
+    const entry = billingByProject.get(m.project_id)!;
+    entry.amountDue += m.amount_due ?? 0;
+    entry.amountPaid += m.amount_paid ?? 0;
+  }
+
+  const rateByPair = new Map<string, number | null>();
+  for (const a of assignmentsRes.data ?? []) {
+    rateByPair.set(`${a.project_id}::${a.subcontractor_id}`, a.hourly_rate);
+  }
+
+  const hoursByProject = new Map<string, { hours: number; cost: number; hasUnknownRate: boolean }>();
+  for (const e of timeEntriesRes.data ?? []) {
+    if (!hoursByProject.has(e.project_id)) hoursByProject.set(e.project_id, { hours: 0, cost: 0, hasUnknownRate: false });
+    const entry = hoursByProject.get(e.project_id)!;
+    entry.hours += e.hours;
+    const rate = rateByPair.get(`${e.project_id}::${e.subcontractor_id}`) ?? null;
+    if (rate === null) entry.hasUnknownRate = true;
+    else entry.cost += e.hours * rate;
+  }
+
+  return (projectsRes.data ?? []).map((p) => {
     const client = Array.isArray(p.clients) ? p.clients[0] : p.clients;
+    const billing = billingByProject.get(p.id) ?? { amountDue: 0, amountPaid: 0 };
+    const hoursCost = hoursByProject.get(p.id) ?? { hours: 0, cost: 0, hasUnknownRate: false };
     return {
       id: p.id,
       name: p.name,
       clientName: client?.name ?? "Unknown",
       type: p.type,
       active: p.active,
+      hours: hoursCost.hours,
+      totalCost: hoursCost.cost,
+      hasUnknownRate: hoursCost.hasUnknownRate,
+      plannedRevenue: p.contract_value,
+      amountPaid: billing.amountPaid,
+      outstandingBalance: billing.amountDue - billing.amountPaid,
     };
   });
 }
