@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { ProjectOption, SubcontractorOption, SubcontractorProfile, TimeEntry } from "./types";
+import type { Assignment, ProjectOption, SubcontractorOption, SubcontractorProfile, TimeEntry } from "./types";
 
 export async function getMySubcontractorProfile(): Promise<SubcontractorProfile | null> {
   const supabase = await createClient();
@@ -83,9 +83,16 @@ export async function getAllActiveProjectOptions(): Promise<ProjectOption[]> {
   return data ?? [];
 }
 
-export async function getProjectSubcontractorAssignments(): Promise<{ projectId: string; subcontractorId: string }[]> {
+export async function getProjectSubcontractorAssignments(): Promise<Assignment[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("project_subcontractors").select("project_id, subcontractor_id");
+  const { data, error } = await supabase
+    .from("project_subcontractors")
+    .select("project_id, subcontractor_id, hourly_rate, allocated_hours");
   if (error) throw new Error(`project_subcontractors: ${error.message}`);
-  return (data ?? []).map((r) => ({ projectId: r.project_id, subcontractorId: r.subcontractor_id }));
+  return (data ?? []).map((r) => ({
+    projectId: r.project_id,
+    subcontractorId: r.subcontractor_id,
+    hourlyRate: r.hourly_rate,
+    allocatedHours: r.allocated_hours,
+  }));
 }

@@ -25,3 +25,10 @@ export interface SubcontractorOption {
   id: string;
   name: string;
 }
+
+export interface Assignment {
+  projectId: string;
+  subcontractorId: string;
+  hourlyRate: number | null;
+  allocatedHours: number | null;
+}

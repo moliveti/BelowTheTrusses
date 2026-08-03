@@ -39,9 +39,23 @@ tagging can happen gradually without blocking anything.
 
 ## Phase 4 — Geography & Subcontractor Depth
 - State field capture (backfill-friendly) + state breakdown view.
-- Subcontractor-project linkage view (who's on what).
-- (If pursued) Subcontractor weekly hour-logging — separate lightweight login, limited to their
-  own hours against their assigned projects.
+- ~~Subcontractor-project linkage view (who's on what).~~ — **Done ahead of schedule**: built as the
+  "Contracted Work" tab, including daily hour-logging (own login, own assigned projects only, no
+  financial visibility beyond their own hours), per-assignment rate + allocated-hours capture, and
+  cost-by-subcontractor / cost-by-project rollups.
+
+## Backlog Ideas (not yet scheduled)
+- **Project intake with hours/pricing forecasting.** A proper "New Project" quoting step that
+  estimates hours and price upfront, rather than assigning rates only after work starts. Owner's
+  framing (2026-08-03): subcontractor rates should carry a margin (the rate paid to the sub isn't
+  the rate billed to the client), and every subcontracted scope needs Amy's own QA/verification
+  time factored in — she'd pre-enter how many hours she expects to spend checking a contractor's
+  work on that project, alongside the contractor's allocated hours and preloaded rate, so the
+  quote/estimate reflects true cost (sub cost + margin + Amy's QA time), not just the sub's rate.
+  Ties into the profitability angle below.
+- **Profitability reporting.** Once rates + hours + costs are tracked (done) and forecasting exists
+  (above), surface actual project margin — revenue vs. (subcontractor cost + Amy's QA time cost) —
+  to inform better quoting and subcontracting decisions over time.
 
 ## Ongoing / Not Scheduled
 - Client-facing portal, file storage, task management — explicitly out of scope per PRD section 7,

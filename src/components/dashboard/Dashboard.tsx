@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import type { DashboardData, RevenueMode } from "@/lib/dashboard/types";
-import type { ProjectOption, SubcontractorOption, TimeEntry } from "@/lib/hours/types";
+import type { Assignment, ProjectOption, SubcontractorOption, TimeEntry } from "@/lib/hours/types";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
@@ -23,7 +23,7 @@ interface ContractedWorkData {
   timeEntries: TimeEntry[];
   subcontractors: SubcontractorOption[];
   activeProjects: ProjectOption[];
-  assignments: { projectId: string; subcontractorId: string }[];
+  assignments: Assignment[];
 }
 
 export function Dashboard({
