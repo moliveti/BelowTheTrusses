@@ -30,8 +30,8 @@ export function KpiRow({ rows, currentYear }: { rows: RevenueRow[]; currentYear:
       {cards.map((k) => (
         <div
           key={k.label}
-          className={`border border-t-2 border-t-brand-accent bg-surface p-5 ${
-            k.isCurrent ? "border-brand-accent/40 bg-brand-accent/5" : "border-line"
+          className={`border-t-2 border-t-brand-accent p-5 ${
+            k.isCurrent ? "border border-brand-accent/40 bg-brand-accent/5" : "border border-line bg-surface"
           }`}
         >
           <div className="mb-2 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{k.label}</div>
