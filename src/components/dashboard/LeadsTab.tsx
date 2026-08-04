@@ -10,6 +10,8 @@ import { SCOPE_CATEGORIES } from "@/lib/scope";
 const STATUSES: LeadStatus[] = ["New", "Contacted", "Qualified", "Converted", "Lost"];
 const OPEN_STATUSES: LeadStatus[] = ["New", "Contacted", "Qualified"];
 const TYPES = ["Residential", "Commercial", "Furniture"] as const;
+const REFERRAL_TYPES = ["Past Client", "Realtor", "Vendor", "Other"] as const;
+const NEW_SOURCE_SENTINEL = "__new__";
 
 type SortField = "name" | "type" | "budget" | "referral" | "status" | "days";
 type StatusFilter = "active" | "all" | LeadStatus;
@@ -26,14 +28,38 @@ function staleness(days: number): { label: string; className: string } {
   return { label: "text-warning", className: "border-warning text-warning" };
 }
 
+// <input type="month"> uses "YYYY-MM"; the DB stores the 1st of that month.
+function monthInputValue(dateIso: string | null): string {
+  return dateIso ? dateIso.slice(0, 7) : "";
+}
+
+function monthInputToDate(month: string): string | null {
+  return month ? `${month}-01` : null;
+}
+
+function formatMonth(dateIso: string): string {
+  const d = new Date(`${dateIso}T00:00:00`);
+  return d.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+function formatTimelineRange(start: string | null, end: string | null): string | null {
+  if (start && end) {
+    return start === end ? formatMonth(start) : `${formatMonth(start)} – ${formatMonth(end)}`;
+  }
+  if (start) return `From ${formatMonth(start)}`;
+  if (end) return `By ${formatMonth(end)}`;
+  return null;
+}
+
 export function LeadsTab({
   leads: initialLeads,
-  referralSources,
+  referralSources: initialReferralSources,
 }: {
   leads: Lead[];
   referralSources: ReferralSource[];
 }) {
   const [leads, setLeads] = useState(initialLeads);
+  const [referralSources, setReferralSources] = useState(initialReferralSources);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [sortField, setSortField] = useState<SortField>("days");
   const [sortAsc, setSortAsc] = useState(false);
@@ -41,6 +67,10 @@ export function LeadsTab({
 
   function upsertLead(lead: Lead) {
     setLeads((prev) => [lead, ...prev]);
+  }
+
+  function handleSourceCreated(source: ReferralSource) {
+    setReferralSources((prev) => [...prev, source].sort((a, b) => a.name.localeCompare(b.name)));
   }
 
   function patchLead(id: string, patch: Partial<Lead>) {
@@ -123,7 +153,7 @@ export function LeadsTab({
 
       <section className="mb-10">
         <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">New Lead</h3>
-        <LeadIntakeForm referralSources={referralSources} onAdded={upsertLead} />
+        <LeadIntakeForm referralSources={referralSources} onAdded={upsertLead} onSourceCreated={handleSourceCreated} />
       </section>
 
       <section>
@@ -190,7 +220,9 @@ export function LeadsTab({
                         </td>
                         <td className="px-3 py-2 text-ink/70">
                           {lead.budgetRange && <div>{lead.budgetRange}</div>}
-                          {lead.timeline && <div>{lead.timeline}</div>}
+                          {formatTimelineRange(lead.timelineStartMonth, lead.timelineEndMonth) && (
+                            <div>{formatTimelineRange(lead.timelineStartMonth, lead.timelineEndMonth)}</div>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-ink/70">{lead.referralSourceName ?? "—"}</td>
                         <td className="px-3 py-2">
@@ -209,6 +241,7 @@ export function LeadsTab({
                               onPatch={(patch) => patchLead(lead.id, patch)}
                               onMarkContacted={() => markContacted(lead.id)}
                               onConvert={() => convertToSow(lead)}
+                              onSourceCreated={handleSourceCreated}
                             />
                           </td>
                         </tr>
@@ -290,12 +323,125 @@ function ScopePills({ value, onChange }: { value: string[]; onChange: (v: string
   );
 }
 
+function ReferralSourceSelect({
+  referralSources,
+  value,
+  onChange,
+  onSourceCreated,
+}: {
+  referralSources: ReferralSource[];
+  value: string;
+  onChange: (id: string, name: string | null) => void;
+  onSourceCreated: (source: ReferralSource) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState<(typeof REFERRAL_TYPES)[number]>("Other");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function create() {
+    setError("");
+    const name = newName.trim();
+    if (!name) return setError("Enter a name.");
+
+    setSaving(true);
+    const supabase = createClient();
+    const { data, error: insertError } = await supabase
+      .from("referral_sources")
+      .insert({ name, type: newType })
+      .select("id, name, type")
+      .single();
+    setSaving(false);
+
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+
+    onSourceCreated(data);
+    onChange(data.id, data.name);
+    setAdding(false);
+    setNewName("");
+    setNewType("Other");
+  }
+
+  if (adding) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          autoFocus
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="New source name"
+          className="w-32 border border-line px-2 py-1.5 text-xs"
+        />
+        <select
+          value={newType}
+          onChange={(e) => setNewType(e.target.value as (typeof REFERRAL_TYPES)[number])}
+          className="border border-line px-1 py-1.5 text-xs"
+        >
+          {REFERRAL_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={create}
+          disabled={saving}
+          className="bg-brand-primary px-2 py-1.5 font-mono text-[10px] uppercase text-white disabled:opacity-50"
+        >
+          {saving ? "…" : "Add"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAdding(false);
+            setError("");
+          }}
+          className="font-mono text-[10px] uppercase text-ink/50 underline underline-offset-2"
+        >
+          Cancel
+        </button>
+        {error && <span className="w-full text-[10px] text-warning">{error}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        if (e.target.value === NEW_SOURCE_SENTINEL) {
+          setAdding(true);
+          return;
+        }
+        const source = referralSources.find((r) => r.id === e.target.value);
+        onChange(e.target.value, source?.name ?? null);
+      }}
+      className="w-full border border-line px-2 py-1.5 text-xs"
+    >
+      <option value="">—</option>
+      {referralSources.map((r) => (
+        <option key={r.id} value={r.id}>
+          {r.name}
+        </option>
+      ))}
+      <option value={NEW_SOURCE_SENTINEL}>+ Add new source…</option>
+    </select>
+  );
+}
+
 function LeadIntakeForm({
   referralSources,
   onAdded,
+  onSourceCreated,
 }: {
   referralSources: ReferralSource[];
   onAdded: (lead: Lead) => void;
+  onSourceCreated: (source: ReferralSource) => void;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -304,7 +450,8 @@ function LeadIntakeForm({
   const [scopeTags, setScopeTags] = useState<string[]>([]);
   const [state, setState] = useState("");
   const [budgetRange, setBudgetRange] = useState("");
-  const [timeline, setTimeline] = useState("");
+  const [timelineStart, setTimelineStart] = useState("");
+  const [timelineEnd, setTimelineEnd] = useState("");
   const [referralSourceId, setReferralSourceId] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -314,6 +461,9 @@ function LeadIntakeForm({
     e.preventDefault();
     setError("");
     if (!name.trim()) return setError("Name is required.");
+
+    const timelineStartMonth = monthInputToDate(timelineStart);
+    const timelineEndMonth = monthInputToDate(timelineEnd);
 
     setSaving(true);
     const supabase = createClient();
@@ -327,7 +477,8 @@ function LeadIntakeForm({
         scope_tags: scopeTags,
         state: state.trim() || null,
         budget_range: budgetRange.trim() || null,
-        timeline: timeline.trim() || null,
+        timeline_start_month: timelineStartMonth,
+        timeline_end_month: timelineEndMonth,
         referral_source_id: referralSourceId || null,
         notes: notes.trim() || null,
       })
@@ -350,7 +501,8 @@ function LeadIntakeForm({
       scopeTags,
       state: state.trim() || null,
       budgetRange: budgetRange.trim() || null,
-      timeline: timeline.trim() || null,
+      timelineStartMonth,
+      timelineEndMonth,
       referralSourceId: referralSourceId || null,
       referralSourceName: referral?.name ?? null,
       notes: notes.trim() || null,
@@ -368,7 +520,8 @@ function LeadIntakeForm({
     setScopeTags([]);
     setState("");
     setBudgetRange("");
-    setTimeline("");
+    setTimelineStart("");
+    setTimelineEnd("");
     setReferralSourceId("");
     setNotes("");
   }
@@ -414,28 +567,31 @@ function LeadIntakeForm({
         />
       </div>
       <div>
-        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Timeline</label>
-        <input
-          value={timeline}
-          onChange={(e) => setTimeline(e.target.value)}
-          placeholder="e.g. Spring 2027"
-          className="w-full border border-line px-2 py-1.5 text-xs"
-        />
+        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Tentative Timeline</label>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="month"
+            value={timelineStart}
+            onChange={(e) => setTimelineStart(e.target.value)}
+            className="w-full border border-line px-2 py-1.5 text-xs"
+          />
+          <span className="text-ink/40">–</span>
+          <input
+            type="month"
+            value={timelineEnd}
+            onChange={(e) => setTimelineEnd(e.target.value)}
+            className="w-full border border-line px-2 py-1.5 text-xs"
+          />
+        </div>
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Referral Source</label>
-        <select
+        <ReferralSourceSelect
+          referralSources={referralSources}
           value={referralSourceId}
-          onChange={(e) => setReferralSourceId(e.target.value)}
-          className="w-full border border-line px-2 py-1.5 text-xs"
-        >
-          <option value="">—</option>
-          {referralSources.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
+          onChange={(id) => setReferralSourceId(id)}
+          onSourceCreated={onSourceCreated}
+        />
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Notes</label>
@@ -462,12 +618,14 @@ function LeadEditPanel({
   onPatch,
   onMarkContacted,
   onConvert,
+  onSourceCreated,
 }: {
   lead: Lead;
   referralSources: ReferralSource[];
   onPatch: (patch: Partial<Lead>) => void;
   onMarkContacted: () => void;
   onConvert: () => void;
+  onSourceCreated: (source: ReferralSource) => void;
 }) {
   async function update(column: string, value: string | string[] | null, patch: Partial<Lead>) {
     const supabase = createClient();
@@ -531,33 +689,39 @@ function LeadEditPanel({
         />
       </div>
       <div>
-        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Timeline</label>
-        <input
-          defaultValue={lead.timeline ?? ""}
-          onBlur={(e) => update("timeline", e.target.value || null, { timeline: e.target.value || null })}
-          className="w-full border border-line px-2 py-1.5 text-xs"
-        />
+        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Tentative Timeline</label>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="month"
+            defaultValue={monthInputValue(lead.timelineStartMonth)}
+            onBlur={(e) => {
+              const date = monthInputToDate(e.target.value);
+              update("timeline_start_month", date, { timelineStartMonth: date });
+            }}
+            className="w-full border border-line px-2 py-1.5 text-xs"
+          />
+          <span className="text-ink/40">–</span>
+          <input
+            type="month"
+            defaultValue={monthInputValue(lead.timelineEndMonth)}
+            onBlur={(e) => {
+              const date = monthInputToDate(e.target.value);
+              update("timeline_end_month", date, { timelineEndMonth: date });
+            }}
+            className="w-full border border-line px-2 py-1.5 text-xs"
+          />
+        </div>
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Referral Source</label>
-        <select
-          defaultValue={lead.referralSourceId ?? ""}
-          onChange={(e) => {
-            const referral = referralSources.find((r) => r.id === e.target.value);
-            update("referral_source_id", e.target.value || null, {
-              referralSourceId: e.target.value || null,
-              referralSourceName: referral?.name ?? null,
-            });
-          }}
-          className="w-full border border-line px-2 py-1.5 text-xs"
-        >
-          <option value="">—</option>
-          {referralSources.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
+        <ReferralSourceSelect
+          referralSources={referralSources}
+          value={lead.referralSourceId ?? ""}
+          onChange={(id, name) =>
+            update("referral_source_id", id || null, { referralSourceId: id || null, referralSourceName: name })
+          }
+          onSourceCreated={onSourceCreated}
+        />
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Status</label>

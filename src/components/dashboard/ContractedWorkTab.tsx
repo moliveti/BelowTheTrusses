@@ -11,10 +11,10 @@ import { RateSettings } from "./RateSettings";
 
 export function ContractedWorkTab({
   entries: initialEntries,
-  subcontractors,
+  subcontractors: initialSubcontractors,
   activeProjects,
   initialAssignments,
-  rates,
+  rates: initialRates,
 }: {
   entries: TimeEntry[];
   subcontractors: SubcontractorOption[];
@@ -24,8 +24,16 @@ export function ContractedWorkTab({
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [assignments, setAssignments] = useState(initialAssignments);
+  const [subcontractors, setSubcontractors] = useState(initialSubcontractors);
+  const [rates, setRates] = useState(initialRates);
   const [subFilter, setSubFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
+  const [subTab, setSubTab] = useState<"overview" | "time" | "assignments">("overview");
+
+  function handleSubcontractorAdded(sub: SubcontractorRates) {
+    setSubcontractors((prev) => [...prev, { id: sub.id, name: sub.name }].sort((a, b) => a.name.localeCompare(b.name)));
+    setRates((prev) => [...prev, sub]);
+  }
 
   const weekStartIso = toIsoDate(startOfWeek(new Date()));
   const weekEndIso = toIsoDate(endOfWeek(new Date()));
@@ -51,6 +59,12 @@ export function ContractedWorkTab({
     if (!error) setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
+  const SUB_TABS: { key: typeof subTab; label: string }[] = [
+    { key: "overview", label: "Contracted Work" },
+    { key: "time", label: "Subcontractor Time Input" },
+    { key: "assignments", label: "Project Assignments" },
+  ];
+
   return (
     <div>
       <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
@@ -58,82 +72,107 @@ export function ContractedWorkTab({
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Hours &amp; Invoicing</span>
       </div>
 
-      <section className="mb-10">
-        <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">This Week</h3>
-        {weekBySubcontractor.length === 0 ? (
-          <div className="border border-line bg-surface p-4 text-sm text-ink/50">No hours logged this week.</div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {weekBySubcontractor.map((s) => (
-              <div key={s.label} className="border border-line border-t-2 border-t-brand-accent bg-surface p-4">
-                <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{s.label}</div>
-                <div className="font-mono text-lg tabular-nums text-ink">{s.total.toFixed(2)} hrs</div>
+      <div className="mb-8 flex flex-wrap gap-1 border-b border-line">
+        {SUB_TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setSubTab(t.key)}
+            className={`px-4 py-2 font-mono text-[11px] uppercase tracking-wide transition ${
+              subTab === t.key ? "border-b-2 border-brand-accent text-ink" : "text-ink/50 hover:text-ink"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {subTab === "overview" && (
+        <>
+          <section className="mb-10">
+            <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">This Week</h3>
+            {weekBySubcontractor.length === 0 ? (
+              <div className="border border-line bg-surface p-4 text-sm text-ink/50">No hours logged this week.</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                {weekBySubcontractor.map((s) => (
+                  <div key={s.label} className="border border-line border-t-2 border-t-brand-accent bg-surface p-4">
+                    <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{s.label}</div>
+                    <div className="font-mono text-lg tabular-nums text-ink">{s.total.toFixed(2)} hrs</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+            )}
+          </section>
 
-      <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <CostBySubcontractor rows={costRows} />
-        <CostByProject rows={costRows} />
-      </section>
+          <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <CostBySubcontractor rows={costRows} />
+            <CostByProject rows={costRows} />
+          </section>
 
-      <section className="mb-10">
-        <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Log Time (on behalf of anyone)</h3>
-        <ManualEntryForm
-          subcontractors={subcontractors}
-          activeProjects={activeProjects}
-          onAdded={(entry) => setEntries((prev) => [entry, ...prev])}
-        />
-      </section>
+          <section>
+            <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Default Hourly Rates</h3>
+            <RateSettings initialRates={rates} onSubcontractorAdded={handleSubcontractorAdded} />
+          </section>
+        </>
+      )}
 
-      <section className="mb-10">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h3 className="mr-2 font-mono text-xs uppercase tracking-wide text-ink/60">All Entries</h3>
-          <select
-            value={subFilter}
-            onChange={(e) => setSubFilter(e.target.value)}
-            className="border border-line px-2 py-1 text-xs"
-          >
-            <option value="all">All subcontractors</option>
-            {subcontractors.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={projFilter}
-            onChange={(e) => setProjFilter(e.target.value)}
-            className="border border-line px-2 py-1 text-xs"
-          >
-            <option value="all">All projects</option>
-            {activeProjects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <EntriesTable entries={filtered} onDelete={deleteEntry} />
-      </section>
+      {subTab === "time" && (
+        <>
+          <section className="mb-10">
+            <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Log Time (on behalf of anyone)</h3>
+            <ManualEntryForm
+              subcontractors={subcontractors}
+              activeProjects={activeProjects}
+              onAdded={(entry) => setEntries((prev) => [entry, ...prev])}
+            />
+          </section>
 
-      <section className="mb-10">
-        <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Project Assignments</h3>
-        <AssignmentManager
-          subcontractors={subcontractors}
-          activeProjects={activeProjects}
-          assignments={assignments}
-          setAssignments={setAssignments}
-          rates={rates}
-        />
-      </section>
+          <section>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <h3 className="mr-2 font-mono text-xs uppercase tracking-wide text-ink/60">All Entries</h3>
+              <select
+                value={subFilter}
+                onChange={(e) => setSubFilter(e.target.value)}
+                className="border border-line px-2 py-1 text-xs"
+              >
+                <option value="all">All subcontractors</option>
+                {subcontractors.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={projFilter}
+                onChange={(e) => setProjFilter(e.target.value)}
+                className="border border-line px-2 py-1 text-xs"
+              >
+                <option value="all">All projects</option>
+                {activeProjects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <EntriesTable entries={filtered} onDelete={deleteEntry} />
+          </section>
+        </>
+      )}
 
-      <section>
-        <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Default Hourly Rates</h3>
-        <RateSettings initialRates={rates} />
-      </section>
+      {subTab === "assignments" && (
+        <section>
+          <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Project Assignments</h3>
+          <AssignmentManager
+            subcontractors={subcontractors}
+            activeProjects={activeProjects}
+            assignments={assignments}
+            setAssignments={setAssignments}
+            rates={rates}
+            entries={entries}
+          />
+        </section>
+      )}
     </div>
   );
 }
@@ -456,12 +495,14 @@ function AssignmentManager({
   assignments,
   setAssignments,
   rates,
+  entries,
 }: {
   subcontractors: SubcontractorOption[];
   activeProjects: ProjectOption[];
   assignments: Assignment[];
   setAssignments: React.Dispatch<React.SetStateAction<Assignment[]>>;
   rates: SubcontractorRates[];
+  entries: TimeEntry[];
 }) {
   const [selectedSub, setSelectedSub] = useState(subcontractors[0]?.id ?? "");
   const [search, setSearch] = useState("");
@@ -470,6 +511,12 @@ function AssignmentManager({
   const assignmentByProject = new Map(
     assignments.filter((a) => a.subcontractorId === selectedSub).map((a) => [a.projectId, a])
   );
+
+  const hoursLoggedByProject = new Map<string, number>();
+  for (const e of entries) {
+    if (e.subcontractorId !== selectedSub) continue;
+    hoursLoggedByProject.set(e.projectId, (hoursLoggedByProject.get(e.projectId) ?? 0) + e.hours);
+  }
 
   const visibleProjects = activeProjects.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -543,47 +590,75 @@ function AssignmentManager({
           className="flex-1 border border-line px-2 py-1 text-xs"
         />
       </div>
-      <div className="max-h-80 overflow-y-auto border border-line">
+      <div className="max-h-[28rem] overflow-y-auto border border-line">
         {visibleProjects.map((p) => {
           const assignment = assignmentByProject.get(p.id);
           const isAssigned = !!assignment;
+          const logged = hoursLoggedByProject.get(p.id) ?? 0;
           return (
-            <div
-              key={p.id}
-              className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-1.5 text-[13px] last:border-b-0 hover:bg-canvas"
-            >
-              <label className="flex flex-1 min-w-[160px] cursor-pointer items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={isAssigned}
-                  disabled={pending === p.id}
-                  onChange={() => toggle(p.id)}
-                />
-                <span>{p.name}</span>
-                <span className="ml-auto font-mono text-[10px] uppercase text-ink/40">{p.type}</span>
-              </label>
-              {isAssigned && (
-                <div className="flex items-center gap-2">
+            <div key={p.id} className="border-b border-line px-3 py-1.5 text-[13px] last:border-b-0 hover:bg-canvas">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex flex-1 min-w-[160px] cursor-pointer items-center gap-2">
                   <input
-                    type="number"
-                    placeholder="Rate $/hr"
-                    defaultValue={assignment?.hourlyRate ?? ""}
-                    onBlur={(e) => updateRate(p.id, "hourlyRate", e.target.value)}
-                    className="w-24 border border-line px-2 py-1 text-xs"
+                    type="checkbox"
+                    checked={isAssigned}
+                    disabled={pending === p.id}
+                    onChange={() => toggle(p.id)}
                   />
-                  <input
-                    type="number"
-                    placeholder="Alloc. hrs"
-                    defaultValue={assignment?.allocatedHours ?? ""}
-                    onBlur={(e) => updateRate(p.id, "allocatedHours", e.target.value)}
-                    className="w-24 border border-line px-2 py-1 text-xs"
-                  />
+                  <span>{p.name}</span>
+                  <span className="ml-auto font-mono text-[10px] uppercase text-ink/40">{p.type}</span>
+                </label>
+                {isAssigned && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      placeholder="Rate $/hr"
+                      defaultValue={assignment?.hourlyRate ?? ""}
+                      onBlur={(e) => updateRate(p.id, "hourlyRate", e.target.value)}
+                      className="w-24 border border-line px-2 py-1 text-xs"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Alloc. hrs"
+                      defaultValue={assignment?.allocatedHours ?? ""}
+                      onBlur={(e) => updateRate(p.id, "allocatedHours", e.target.value)}
+                      className="w-24 border border-line px-2 py-1 text-xs"
+                    />
+                  </div>
+                )}
+              </div>
+              {isAssigned && (logged > 0 || assignment?.allocatedHours) && (
+                <div className="mt-1.5 pl-6">
+                  <BurndownBar logged={logged} allocated={assignment?.allocatedHours ?? null} />
                 </div>
               )}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function BurndownBar({ logged, allocated }: { logged: number; allocated: number | null }) {
+  if (allocated === null) {
+    return <div className="font-mono text-[10.5px] text-ink/40">{logged.toFixed(1)} hrs logged · no allocation set</div>;
+  }
+  const pct = allocated > 0 ? Math.min(100, (logged / allocated) * 100) : 100;
+  const over = logged > allocated;
+  const remaining = allocated - logged;
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-40 max-w-[40vw] overflow-hidden bg-line">
+        <div
+          className={`h-full ${over ? "bg-warning" : "bg-brand-accent"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className={`font-mono text-[10.5px] ${over ? "text-warning" : "text-ink/50"}`}>
+        {logged.toFixed(1)} / {allocated.toFixed(1)} hrs
+        {over ? ` · ${Math.abs(remaining).toFixed(1)} over` : ` · ${remaining.toFixed(1)} left`}
+      </span>
     </div>
   );
 }

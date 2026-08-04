@@ -6,7 +6,7 @@ export async function getLeads(): Promise<Lead[]> {
   const { data, error } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, project_type, state, budget_range, timeline, referral_source_id, referral_sources(name), notes, scope_tags, status, last_contacted_date, created_at, converted_sow_id, converted_project_id"
+      "id, name, email, phone, project_type, state, budget_range, timeline_start_month, timeline_end_month, referral_source_id, referral_sources(name), notes, scope_tags, status, last_contacted_date, created_at, converted_sow_id, converted_project_id"
     )
     .order("created_at", { ascending: false });
   if (error) throw new Error(`leads: ${error.message}`);
@@ -21,7 +21,8 @@ export async function getLeads(): Promise<Lead[]> {
       projectType: l.project_type,
       state: l.state,
       budgetRange: l.budget_range,
-      timeline: l.timeline,
+      timelineStartMonth: l.timeline_start_month,
+      timelineEndMonth: l.timeline_end_month,
       referralSourceId: l.referral_source_id,
       referralSourceName: referral?.name ?? null,
       notes: l.notes,

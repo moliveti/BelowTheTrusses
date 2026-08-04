@@ -10,6 +10,7 @@ import dotenv from "dotenv";
 import path from "node:path";
 import ExcelJS from "exceljs";
 import { createClient } from "@supabase/supabase-js";
+import { SCOPE_CATEGORIES } from "../src/lib/scope";
 
 dotenv.config({ path: path.resolve(__dirname, "../.env.local") });
 
@@ -28,17 +29,6 @@ const FONT = { name: "Calibri", size: 11 };
 const HEADER_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
 const HEADER_FONT: Partial<ExcelJS.Font> = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
 const FILL_IN_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF2AC" } };
-
-const SCOPE_CATEGORIES = [
-  "Furniture and Accessories",
-  "Covered Porch",
-  "Sunroom",
-  "Backyard Design",
-  "Kitchen Remodel",
-  "Bathroom Remodel",
-  "Exterior Finishes",
-  "Interior Finishes",
-];
 
 function headerRow(sheet: ExcelJS.Worksheet, headers: string[]) {
   const row = sheet.addRow(headers);

@@ -183,6 +183,13 @@ async function upsertMonthlyMilestone(input: {
   const dueDate = `${year}-${String(monthNum).padStart(2, "0")}-01`;
   const name = `${m[1]} ${year} Payment`;
 
+  // The source sheet only records a billed amount per month, not whether it
+  // was actually collected — so only months already in the past are safe to
+  // assume paid. Anything due today or later must stay Pending so it shows
+  // up as forecast, not revenue, until someone confirms payment in the app.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const isPast = dueDate < todayIso;
+
   const { error } = await supabase.from("milestones").upsert(
     {
       project_id: input.project_id,
@@ -190,9 +197,9 @@ async function upsertMonthlyMilestone(input: {
       sequence_order: monthNum + (year - 2024) * 12,
       due_date: dueDate,
       amount_due: input.amount,
-      paid_date: dueDate,
-      amount_paid: input.amount,
-      status: "Paid",
+      paid_date: isPast ? dueDate : null,
+      amount_paid: isPast ? input.amount : null,
+      status: isPast ? "Paid" : "Pending",
     },
     { onConflict: "project_id,due_date,name" }
   );

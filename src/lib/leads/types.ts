@@ -8,7 +8,9 @@ export interface Lead {
   projectType: string | null;
   state: string | null;
   budgetRange: string | null;
-  timeline: string | null;
+  /** 1st-of-month date strings marking a tentative start/end window, not firm commitments. */
+  timelineStartMonth: string | null;
+  timelineEndMonth: string | null;
   referralSourceId: string | null;
   referralSourceName: string | null;
   notes: string | null;

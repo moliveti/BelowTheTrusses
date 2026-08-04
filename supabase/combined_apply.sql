@@ -633,3 +633,11 @@ set hourly_rate = coalesce(
   (select s.default_hourly_rate from subcontractors s where s.id = e.subcontractor_id)
 )
 where e.hourly_rate is null;
+
+-- ---------------------------------------------------------------------------
+-- 0010: leads timeline as a tentative start/end month range
+-- ---------------------------------------------------------------------------
+
+alter table leads drop column timeline;
+alter table leads add column timeline_start_month date;
+alter table leads add column timeline_end_month date;

@@ -8,11 +8,48 @@ const TYPES: ProjectTypeName[] = ["Residential", "Commercial", "Furniture"];
 
 type FieldStatus = "idle" | "saving" | "saved" | "error";
 
-export function RateSettings({ initialRates }: { initialRates: SubcontractorRates[] }) {
+export function RateSettings({
+  initialRates,
+  onSubcontractorAdded,
+}: {
+  initialRates: SubcontractorRates[];
+  onSubcontractorAdded?: (sub: SubcontractorRates) => void;
+}) {
   const [rates, setRates] = useState(initialRates);
   const [fieldStatus, setFieldStatus] = useState<Record<string, FieldStatus>>({});
   const [fieldError, setFieldError] = useState<Record<string, string>>({});
   const clearTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [newName, setNewName] = useState("");
+  const [newSpecialty, setNewSpecialty] = useState("");
+  const [addSaving, setAddSaving] = useState(false);
+  const [addError, setAddError] = useState("");
+
+  async function addSubcontractor(e: React.FormEvent) {
+    e.preventDefault();
+    setAddError("");
+    const name = newName.trim();
+    if (!name) return setAddError("Enter a name.");
+
+    setAddSaving(true);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("subcontractors")
+      .insert({ name, specialty: newSpecialty.trim() || null })
+      .select("id, name")
+      .single();
+    setAddSaving(false);
+
+    if (error) {
+      setAddError(error.message);
+      return;
+    }
+
+    const sub: SubcontractorRates = { id: data.id, name: data.name, defaultHourlyRate: null, typeRates: {} };
+    setRates((prev) => [...prev, sub].sort((a, b) => a.name.localeCompare(b.name)));
+    onSubcontractorAdded?.(sub);
+    setNewName("");
+    setNewSpecialty("");
+  }
 
   function markSaved(key: string) {
     setFieldStatus((prev) => ({ ...prev, [key]: "saved" }));
@@ -142,6 +179,36 @@ export function RateSettings({ initialRates }: { initialRates: SubcontractorRate
           </tbody>
         </table>
       </div>
+      <form onSubmit={addSubcontractor} className="mt-3 flex flex-wrap items-end gap-2 border-t border-line pt-3">
+        <div>
+          <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">New Subcontractor</label>
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Name"
+            className="w-40 border border-line px-2 py-1.5 text-xs"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Specialty (optional)</label>
+          <input
+            type="text"
+            value={newSpecialty}
+            onChange={(e) => setNewSpecialty(e.target.value)}
+            placeholder="e.g. Plans and renderings"
+            className="w-48 border border-line px-2 py-1.5 text-xs"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={addSaving}
+          className="bg-brand-primary px-4 py-1.5 text-xs text-white transition hover:bg-brand-primary/90 disabled:opacity-50"
+        >
+          {addSaving ? "Adding…" : "Add"}
+        </button>
+        {addError && <span className="text-xs text-warning">{addError}</span>}
+      </form>
     </div>
   );
 }
