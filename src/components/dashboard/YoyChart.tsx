@@ -58,7 +58,11 @@ export function YoyChart({
           borderColor: "#b8894a",
           backgroundColor: "rgba(184,137,74,0.1)",
           borderWidth: 2.5,
-          tension: 0.25,
+          // Straight segments, not a spline: revenue can legitimately fall to
+          // $0 the instant forecast picks up (e.g. Jul -> Aug), and curve
+          // tension's look-ahead smoothing would bend that segment starting
+          // several months early, making the split look earlier than it is.
+          tension: 0,
           pointRadius: 2,
           fill: "origin" as const,
           order: 2,
@@ -70,7 +74,7 @@ export function YoyChart({
           borderDash: [4, 3],
           backgroundColor: "rgba(184,137,74,0.22)",
           borderWidth: 1.5,
-          tension: 0.25,
+          tension: 0,
           pointRadius: 2,
           fill: "-1" as const,
           order: 1,
