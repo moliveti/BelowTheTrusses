@@ -6,18 +6,21 @@ import Image from "next/image";
 import type { DashboardData, RevenueMode } from "@/lib/dashboard/types";
 import type { Assignment, ProjectOption, SubcontractorOption, SubcontractorRates, TimeEntry } from "@/lib/hours/types";
 import type { ProjectListItem } from "@/lib/projects/types";
+import type { Lead } from "@/lib/leads/types";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
 import { ContractedWorkTab } from "./ContractedWorkTab";
 import { ProductivityTab } from "./ProductivityTab";
+import { LeadsTab } from "./LeadsTab";
 import { ProjectsIndex } from "@/components/projects/ProjectsIndex";
 import { SignOutButton } from "@/components/SignOutButton";
 
-type Tab = "financial" | "referrals" | "contracted" | "productivity" | "projects" | "sow";
+type Tab = "financial" | "leads" | "referrals" | "contracted" | "productivity" | "projects" | "sow";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "financial", label: "Financial Dashboard" },
+  { key: "leads", label: "Leads" },
   { key: "referrals", label: "Referral Sources" },
   { key: "contracted", label: "Contracted Work" },
   { key: "productivity", label: "Productivity" },
@@ -40,11 +43,13 @@ export function Dashboard({
   userEmail,
   contractedWork,
   projects,
+  leads,
 }: {
   data: DashboardData;
   userEmail: string | undefined;
   contractedWork: ContractedWorkData;
   projects: ProjectListItem[];
+  leads: Lead[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -111,6 +116,7 @@ export function Dashboard({
           currentMonth={currentMonth}
         />
       )}
+      {tab === "leads" && <LeadsTab leads={leads} referralSources={data.referralSources} />}
       {tab === "referrals" && (
         <ReferralsTab rows={rows} referralSources={data.referralSources} mode={mode} onModeChange={setMode} />
       )}

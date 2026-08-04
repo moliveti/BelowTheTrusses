@@ -9,6 +9,7 @@ import {
   getSubcontractorRates,
 } from "@/lib/hours/queries";
 import { getProjectsIndex } from "@/lib/projects/queries";
+import { getLeads } from "@/lib/leads/queries";
 import { getMyRole } from "@/lib/profile";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 
@@ -23,7 +24,7 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, timeEntries, subcontractors, activeProjects, assignments, projects, rates] = await Promise.all([
+  const [data, timeEntries, subcontractors, activeProjects, assignments, projects, rates, leads] = await Promise.all([
     getDashboardData(),
     getAllTimeEntriesForAdmin(),
     getAllSubcontractorOptions(),
@@ -31,6 +32,7 @@ export default async function HomePage() {
     getProjectSubcontractorAssignments(),
     getProjectsIndex(),
     getSubcontractorRates(),
+    getLeads(),
   ]);
 
   return (
@@ -39,6 +41,7 @@ export default async function HomePage() {
       userEmail={user?.email}
       contractedWork={{ timeEntries, subcontractors, activeProjects, assignments, rates }}
       projects={projects}
+      leads={leads}
     />
   );
 }
