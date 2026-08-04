@@ -75,65 +75,71 @@ export function Dashboard({
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10 md:px-10">
-      <header className="mb-6 flex items-center justify-between gap-4 border-b border-line pb-6">
-        <div className="flex items-center gap-4">
-          <Image src="/logo.png" alt="Below the Trusses" width={44} height={44} />
-          <div>
-            <h1 className="text-lg text-ink">
-              Below the <em className="font-normal not-italic text-brand-accent">Trusses</em>
-            </h1>
-            <p className="text-xs text-ink/60">{userEmail}</p>
-          </div>
+    <>
+      <div className="sticky top-0 z-20 border-b border-line bg-canvas">
+        <div className="mx-auto max-w-6xl px-6 md:px-10">
+          <header className="flex items-center justify-between gap-4 border-b border-line py-5">
+            <div className="flex items-center gap-4">
+              <Image src="/logo.png" alt="Below the Trusses" width={64} height={64} />
+              <div>
+                <h1 className="text-2xl text-ink">
+                  Below the <em className="font-normal not-italic text-brand-accent">Trusses</em>
+                </h1>
+                <p className="text-xs text-ink/60">{userEmail}</p>
+              </div>
+            </div>
+            <SignOutButton />
+          </header>
+
+          <nav className="flex flex-wrap gap-1">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`px-5 py-3 font-mono text-xs uppercase tracking-wide transition ${
+                  tab === t.key
+                    ? "border-b-2 border-brand-accent text-ink"
+                    : "text-ink/50 hover:text-ink"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
         </div>
-        <SignOutButton />
-      </header>
+      </div>
 
-      <nav className="mb-10 flex flex-wrap gap-1 border-b border-line">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-5 py-3 font-mono text-xs uppercase tracking-wide transition ${
-              tab === t.key
-                ? "border-b-2 border-brand-accent text-ink"
-                : "text-ink/50 hover:text-ink"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-
-      {tab === "financial" && (
-        <FinancialDashboardTab
-          rows={rows}
-          collectedRows={data.collected}
-          forecastRows={data.forecast}
-          mode={mode}
-          onModeChange={setMode}
-          currentYear={currentYear}
-          currentMonth={currentMonth}
-        />
-      )}
-      {tab === "leads" && <LeadsTab leads={leads} referralSources={data.referralSources} />}
-      {tab === "referrals" && (
-        <ReferralsTab rows={rows} referralSources={data.referralSources} mode={mode} onModeChange={setMode} />
-      )}
-      {tab === "contracted" && (
-        <ContractedWorkTab
-          entries={contractedWork.timeEntries}
-          subcontractors={contractedWork.subcontractors}
-          activeProjects={contractedWork.activeProjects}
-          initialAssignments={contractedWork.assignments}
-          rates={contractedWork.rates}
-        />
-      )}
-      {tab === "productivity" && (
-        <ProductivityTab entries={contractedWork.timeEntries} assignments={contractedWork.assignments} />
-      )}
-      {tab === "projects" && <ProjectsIndex projects={projects} />}
-      {tab === "sow" && <SowTab rows={data.sow} />}
-    </main>
+      <main className="mx-auto max-w-6xl px-6 py-10 md:px-10">
+        {tab === "financial" && (
+          <FinancialDashboardTab
+            rows={rows}
+            collectedRows={data.collected}
+            forecastRows={data.forecast}
+            mode={mode}
+            onModeChange={setMode}
+            currentYear={currentYear}
+            currentMonth={currentMonth}
+          />
+        )}
+        {tab === "leads" && <LeadsTab leads={leads} referralSources={data.referralSources} />}
+        {tab === "referrals" && (
+          <ReferralsTab rows={rows} referralSources={data.referralSources} mode={mode} onModeChange={setMode} />
+        )}
+        {tab === "contracted" && (
+          <ContractedWorkTab
+            entries={contractedWork.timeEntries}
+            subcontractors={contractedWork.subcontractors}
+            activeProjects={contractedWork.activeProjects}
+            initialAssignments={contractedWork.assignments}
+            rates={contractedWork.rates}
+          />
+        )}
+        {tab === "productivity" && (
+          <ProductivityTab entries={contractedWork.timeEntries} assignments={contractedWork.assignments} />
+        )}
+        {tab === "projects" && <ProjectsIndex projects={projects} />}
+        {tab === "sow" && <SowTab rows={data.sow} />}
+      </main>
+    </>
   );
 }

@@ -38,7 +38,19 @@ export function FinancialDashboardTab({
       </div>
 
       <section className="mb-12">
-        <KpiRow rows={rows} currentYear={currentYear} />
+        <KpiRow
+          rows={rows}
+          currentYear={currentYear}
+          extra={
+            <BusinessMix
+              rows={rows}
+              currentYear={currentYear}
+              currentMonth={currentMonth}
+              period={mixPeriod}
+              onPeriodChange={setMixPeriod}
+            />
+          }
+        />
       </section>
 
       <section className="mb-12">
@@ -61,19 +73,6 @@ export function FinancialDashboardTab({
           <h2 className="text-lg font-normal">Monthly Breakdown</h2>
         </div>
         <BreakdownTable rows={rows} onYearClick={handleYearClick} />
-      </section>
-
-      <section>
-        <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
-          <h2 className="text-lg font-normal">Business Mix</h2>
-        </div>
-        <BusinessMix
-          rows={rows}
-          currentYear={currentYear}
-          currentMonth={currentMonth}
-          period={mixPeriod}
-          onPeriodChange={setMixPeriod}
-        />
       </section>
     </div>
   );

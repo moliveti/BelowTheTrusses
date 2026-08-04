@@ -4,7 +4,15 @@ import type { RevenueRow } from "@/lib/dashboard/types";
 import { distinctYears, yearTotal, yoyDeltaPct } from "@/lib/dashboard/aggregate";
 import { fmtUsd } from "@/lib/dashboard/format";
 
-export function KpiRow({ rows, currentYear }: { rows: RevenueRow[]; currentYear: number }) {
+export function KpiRow({
+  rows,
+  currentYear,
+  extra,
+}: {
+  rows: RevenueRow[];
+  currentYear: number;
+  extra?: React.ReactNode;
+}) {
   const years = distinctYears(rows);
   const shownYears = years.filter((y) => y <= currentYear).slice(-3);
 
@@ -26,7 +34,7 @@ export function KpiRow({ rows, currentYear }: { rows: RevenueRow[]; currentYear:
   cards.push({ label: "Referral-Sourced (lifetime)", value: fmtUsd(referralTotal), delta: null, isCurrent: false });
 
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+    <div className={`grid grid-cols-2 gap-4 ${extra ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
       {cards.map((k) => (
         <div
           key={k.label}
@@ -43,6 +51,7 @@ export function KpiRow({ rows, currentYear }: { rows: RevenueRow[]; currentYear:
           )}
         </div>
       ))}
+      {extra}
     </div>
   );
 }
