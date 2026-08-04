@@ -579,3 +579,6 @@ create policy "leads_owner_staff" on leads
   for all to authenticated
   using (is_owner_or_staff())
   with check (is_owner_or_staff());
+-- Lightweight scope interest on leads (informal, pre-project — names only,
+-- not a join to scope_tags with dollar amounts like project_scope_tags).
+alter table leads add column scope_tags text[] not null default '{}';

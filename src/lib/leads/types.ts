@@ -12,6 +12,7 @@ export interface Lead {
   referralSourceId: string | null;
   referralSourceName: string | null;
   notes: string | null;
+  scopeTags: string[];
   status: LeadStatus;
   lastContactedDate: string | null;
   createdAt: string;
