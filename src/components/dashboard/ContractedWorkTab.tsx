@@ -2,21 +2,25 @@
 
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Assignment, ProjectOption, SubcontractorOption, TimeEntry } from "@/lib/hours/types";
+import type { Assignment, ProjectOption, SubcontractorOption, SubcontractorRates, TimeEntry } from "@/lib/hours/types";
 import { endOfWeek, fmtShortDate, startOfWeek, toIsoDate } from "@/lib/hours/dates";
 import { buildCostRows } from "@/lib/hours/cost";
+import { effectiveRate } from "@/lib/hours/rates";
 import { fmtUsd } from "@/lib/dashboard/format";
+import { RateSettings } from "./RateSettings";
 
 export function ContractedWorkTab({
   entries: initialEntries,
   subcontractors,
   activeProjects,
   initialAssignments,
+  rates,
 }: {
   entries: TimeEntry[];
   subcontractors: SubcontractorOption[];
   activeProjects: ProjectOption[];
   initialAssignments: Assignment[];
+  rates: SubcontractorRates[];
 }) {
   const [entries, setEntries] = useState(initialEntries);
   const [assignments, setAssignments] = useState(initialAssignments);
@@ -115,14 +119,20 @@ export function ContractedWorkTab({
         <EntriesTable entries={filtered} onDelete={deleteEntry} />
       </section>
 
-      <section>
+      <section className="mb-10">
         <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Project Assignments</h3>
         <AssignmentManager
           subcontractors={subcontractors}
           activeProjects={activeProjects}
           assignments={assignments}
           setAssignments={setAssignments}
+          rates={rates}
         />
+      </section>
+
+      <section>
+        <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Default Hourly Rates</h3>
+        <RateSettings initialRates={rates} />
       </section>
     </div>
   );
@@ -444,11 +454,13 @@ function AssignmentManager({
   activeProjects,
   assignments,
   setAssignments,
+  rates,
 }: {
   subcontractors: SubcontractorOption[];
   activeProjects: ProjectOption[];
   assignments: Assignment[];
   setAssignments: React.Dispatch<React.SetStateAction<Assignment[]>>;
+  rates: SubcontractorRates[];
 }) {
   const [selectedSub, setSelectedSub] = useState(subcontractors[0]?.id ?? "");
   const [search, setSearch] = useState("");
@@ -476,13 +488,16 @@ function AssignmentManager({
         setAssignments((prev) => prev.filter((a) => !(a.projectId === projectId && a.subcontractorId === selectedSub)));
       }
     } else {
+      const project = activeProjects.find((p) => p.id === projectId);
+      const subRates = rates.find((r) => r.id === selectedSub);
+      const autoRate = project ? effectiveRate(subRates, project.type) : null;
       const { error } = await supabase
         .from("project_subcontractors")
-        .insert({ project_id: projectId, subcontractor_id: selectedSub });
+        .insert({ project_id: projectId, subcontractor_id: selectedSub, hourly_rate: autoRate });
       if (!error) {
         setAssignments((prev) => [
           ...prev,
-          { projectId, subcontractorId: selectedSub, hourlyRate: null, allocatedHours: null },
+          { projectId, subcontractorId: selectedSub, hourlyRate: autoRate, allocatedHours: null },
         ]);
       }
     }

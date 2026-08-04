@@ -6,6 +6,7 @@ import {
   getAllSubcontractorOptions,
   getAllTimeEntriesForAdmin,
   getProjectSubcontractorAssignments,
+  getSubcontractorRates,
 } from "@/lib/hours/queries";
 import { getProjectsIndex } from "@/lib/projects/queries";
 import { getMyRole } from "@/lib/profile";
@@ -22,20 +23,21 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, timeEntries, subcontractors, activeProjects, assignments, projects] = await Promise.all([
+  const [data, timeEntries, subcontractors, activeProjects, assignments, projects, rates] = await Promise.all([
     getDashboardData(),
     getAllTimeEntriesForAdmin(),
     getAllSubcontractorOptions(),
     getAllActiveProjectOptions(),
     getProjectSubcontractorAssignments(),
     getProjectsIndex(),
+    getSubcontractorRates(),
   ]);
 
   return (
     <Dashboard
       data={data}
       userEmail={user?.email}
-      contractedWork={{ timeEntries, subcontractors, activeProjects, assignments }}
+      contractedWork={{ timeEntries, subcontractors, activeProjects, assignments, rates }}
       projects={projects}
     />
   );

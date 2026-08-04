@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import type { DashboardData, RevenueMode } from "@/lib/dashboard/types";
-import type { Assignment, ProjectOption, SubcontractorOption, TimeEntry } from "@/lib/hours/types";
+import type { Assignment, ProjectOption, SubcontractorOption, SubcontractorRates, TimeEntry } from "@/lib/hours/types";
 import type { ProjectListItem } from "@/lib/projects/types";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
@@ -32,6 +32,7 @@ interface ContractedWorkData {
   subcontractors: SubcontractorOption[];
   activeProjects: ProjectOption[];
   assignments: Assignment[];
+  rates: SubcontractorRates[];
 }
 
 export function Dashboard({
@@ -119,6 +120,7 @@ export function Dashboard({
           subcontractors={contractedWork.subcontractors}
           activeProjects={contractedWork.activeProjects}
           initialAssignments={contractedWork.assignments}
+          rates={contractedWork.rates}
         />
       )}
       {tab === "productivity" && (

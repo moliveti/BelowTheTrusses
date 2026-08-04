@@ -1,5 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Assignment, ProjectOption, SubcontractorOption, SubcontractorProfile, TimeEntry } from "./types";
+import type {
+  Assignment,
+  ProjectOption,
+  ProjectTypeName,
+  SubcontractorOption,
+  SubcontractorProfile,
+  SubcontractorRates,
+  TimeEntry,
+} from "./types";
 
 export async function getMySubcontractorProfile(): Promise<SubcontractorProfile | null> {
   const supabase = await createClient();
@@ -81,6 +89,29 @@ export async function getAllActiveProjectOptions(): Promise<ProjectOption[]> {
     .order("name");
   if (error) throw new Error(`projects: ${error.message}`);
   return data ?? [];
+}
+
+export async function getSubcontractorRates(): Promise<SubcontractorRates[]> {
+  const supabase = await createClient();
+  const [subsRes, typeRatesRes] = await Promise.all([
+    supabase.from("subcontractors").select("id, name, default_hourly_rate").order("name"),
+    supabase.from("subcontractor_type_rates").select("subcontractor_id, project_type, hourly_rate"),
+  ]);
+  if (subsRes.error) throw new Error(`subcontractors: ${subsRes.error.message}`);
+  if (typeRatesRes.error) throw new Error(`subcontractor_type_rates: ${typeRatesRes.error.message}`);
+
+  const typeRatesBySub = new Map<string, Partial<Record<ProjectTypeName, number>>>();
+  for (const r of typeRatesRes.data ?? []) {
+    if (!typeRatesBySub.has(r.subcontractor_id)) typeRatesBySub.set(r.subcontractor_id, {});
+    typeRatesBySub.get(r.subcontractor_id)![r.project_type as ProjectTypeName] = r.hourly_rate;
+  }
+
+  return (subsRes.data ?? []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    defaultHourlyRate: s.default_hourly_rate,
+    typeRates: typeRatesBySub.get(s.id) ?? {},
+  }));
 }
 
 export async function getProjectSubcontractorAssignments(): Promise<Assignment[]> {

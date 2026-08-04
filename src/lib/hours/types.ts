@@ -32,3 +32,12 @@ export interface Assignment {
   hourlyRate: number | null;
   allocatedHours: number | null;
 }
+
+export type ProjectTypeName = "Residential" | "Commercial" | "Furniture";
+
+export interface SubcontractorRates {
+  id: string;
+  name: string;
+  defaultHourlyRate: number | null;
+  typeRates: Partial<Record<ProjectTypeName, number>>;
+}
