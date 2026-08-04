@@ -64,6 +64,18 @@ tagging can happen gradually without blocking anything.
   separate editable field for how many of those hours are subcontracted — that split is often
   decided after intake, not during, so it needs to stay editable post-intake rather than locked in
   at project creation.
+- **Real payment schedules per milestone_templates.** Residential/Commercial/Furniture all need
+  their actual payment-schedule breakdown (percentages + timing) confirmed by the owner and seeded
+  into `milestone_templates` — Residential/Furniture currently hold placeholder percentages per
+  `02_DATA_MODEL.md`, Commercial has nothing seeded at all. Owner owes this data (2026-08-04).
+- **Furniture sale intake form.** A dedicated form distinct from the general project intake:
+  customer name, furniture vendor, total value of goods, and % of goods as revenue (commission
+  rate) — matches the existing reference-only `furniture_commission_rate`/`furniture_sale_total`
+  fields but as structured entry rather than raw columns. Needs a child table, not just fields on
+  `projects`, since a single client's furniture sale can involve multiple vendors, each with its
+  own value/commission line (owner's note, 2026-08-04). Some Commercial projects also have a
+  furniture-commission component, but the owner wants that kept separate from Commercial
+  billing/setup for now, not merged in.
 
 ## Ongoing / Not Scheduled
 - Client-facing portal, file storage, task management — explicitly out of scope per PRD section 7,

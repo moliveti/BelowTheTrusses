@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getMyRole } from "@/lib/profile";
 import { getProjectDetail } from "@/lib/projects/queries";
 import { SignOutButton } from "@/components/SignOutButton";
+import { MilestoneSection } from "@/components/projects/MilestoneSection";
 import { fmtUsd } from "@/lib/dashboard/format";
 
 const fmtDate = (d: string | null) => d ?? "—";
@@ -16,8 +17,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const project = await getProjectDetail(id);
   if (!project) notFound();
-
-  const profitability = project.totalCollected - project.totalCost;
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10 md:px-10">
@@ -59,17 +58,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           {project.referralSourceName && <> · Referral: {project.referralSourceName}</>}
         </p>
         {project.notes && <p className="mt-2 text-sm text-ink/60">{project.notes}</p>}
-      </section>
-
-      <section className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label="Total Original Proposal" value={project.contractValue !== null ? fmtUsd(project.contractValue) : "—"} />
-        <Stat label="Total Collected" value={fmtUsd(project.totalCollected)} />
-        <Stat
-          label="Total Contracted Cost"
-          value={project.hoursByPerson.length === 0 ? "—" : fmtUsd(project.totalCost)}
-          flag={project.hasUnknownRate}
-        />
-        <Stat label="Profitability" value={fmtUsd(profitability)} accent={profitability >= 0 ? "positive" : "warning"} />
       </section>
 
       <section className="mb-8">
@@ -126,41 +114,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         )}
       </section>
 
-      <section className="mb-8">
-        <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">
-          Milestones
-        </h3>
-        {project.milestones.length === 0 ? (
-          <div className="border border-line bg-surface p-4 text-sm text-ink/50">No milestones recorded.</div>
-        ) : (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="w-full min-w-[560px] border-collapse text-[13px]">
-              <thead>
-                <tr className="border-b-2 border-ink">
-                  <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Name</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Due</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Amount Due</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Paid Date</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Amount Paid</th>
-                  <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {project.milestones.map((m) => (
-                  <tr key={m.id} className="border-b border-line">
-                    <td className="px-3 py-2">{m.name}</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtDate(m.dueDate)}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{m.amountDue !== null ? fmtUsd(m.amountDue) : "—"}</td>
-                    <td className="px-3 py-2 text-right font-mono">{fmtDate(m.paidDate)}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{m.amountPaid !== null ? fmtUsd(m.amountPaid) : "—"}</td>
-                    <td className="px-3 py-2 text-left">{m.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <MilestoneSection
+        projectId={project.id}
+        initialMilestones={project.milestones}
+        contractValue={project.contractValue}
+        totalCost={project.totalCost}
+        hasUnknownRate={project.hasUnknownRate}
+        hasHoursLogged={project.hoursByPerson.length > 0}
+      />
 
       <section>
         <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">
@@ -205,29 +166,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         )}
       </section>
     </main>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  flag,
-  accent,
-}: {
-  label: string;
-  value: string;
-  flag?: boolean;
-  accent?: "positive" | "warning";
-}) {
-  const valueClass = accent === "positive" ? "text-positive" : accent === "warning" ? "text-warning" : "text-ink";
-  return (
-    <div className="border border-line border-t-2 border-t-brand-accent bg-surface p-4">
-      <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{label}</div>
-      <div className={`font-mono text-lg tabular-nums ${valueClass}`}>
-        {value}
-        {flag && <span className="ml-1 text-warning">*</span>}
-      </div>
-    </div>
   );
 }
 
