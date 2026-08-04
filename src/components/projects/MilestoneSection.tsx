@@ -25,6 +25,10 @@ export function MilestoneSection({
   const [milestones, setMilestones] = useState(initialMilestones);
 
   const totalCollected = useMemo(() => milestones.reduce((s, m) => s + (m.amountPaid ?? 0), 0), [milestones]);
+  const pendingBalance = useMemo(
+    () => milestones.reduce((s, m) => s + Math.max(0, (m.amountDue ?? 0) - (m.amountPaid ?? 0)), 0),
+    [milestones]
+  );
   const profitability = totalCollected - totalCost;
 
   function patchMilestone(id: string, patch: Partial<MilestoneRow>) {
@@ -60,9 +64,14 @@ export function MilestoneSection({
 
   return (
     <>
-      <section className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <section className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Stat label="Total Original Proposal" value={contractValue !== null ? fmtUsd(contractValue) : "—"} />
         <Stat label="Total Collected" value={fmtUsd(totalCollected)} />
+        <Stat
+          label="Pending Balance"
+          value={fmtUsd(pendingBalance)}
+          accent={pendingBalance > 0 ? "warning" : undefined}
+        />
         <Stat
           label="Total Contracted Cost"
           value={!hasHoursLogged ? "—" : fmtUsd(totalCost)}
@@ -79,31 +88,31 @@ export function MilestoneSection({
           <div className="mb-4 border border-line bg-surface p-4 text-sm text-ink/50">No milestones recorded.</div>
         ) : (
           <div className="mb-4 overflow-x-auto border border-line bg-surface">
-            <table className="w-full min-w-[680px] border-collapse text-[13px]">
+            <table className="w-full border-collapse text-[13px]">
               <thead>
                 <tr className="border-b-2 border-ink">
-                  <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Name</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Due</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Amount Due</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Paid Date</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Amount Paid</th>
-                  <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Status</th>
-                  <th className="px-3 py-2" />
+                  <th className="px-2 py-1.5 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Name</th>
+                  <th className="px-2 py-1.5 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Due</th>
+                  <th className="px-2 py-1.5 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Due $</th>
+                  <th className="px-2 py-1.5 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Paid</th>
+                  <th className="px-2 py-1.5 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Paid $</th>
+                  <th className="px-2 py-1.5 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Status</th>
+                  <th className="px-2 py-1.5" />
                 </tr>
               </thead>
               <tbody>
                 {milestones.map((m) => (
                   <tr key={m.id} className="border-b border-line">
-                    <td className="px-3 py-2">{m.name}</td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-2 py-1.5">{m.name}</td>
+                    <td className="px-2 py-1.5 text-right">
                       <input
                         type="date"
                         defaultValue={m.dueDate ?? ""}
                         onBlur={(e) => updateField(m.id, "due_date", e.target.value, { dueDate: e.target.value || null })}
-                        className="w-32 border border-line px-1.5 py-1 text-right text-xs"
+                        className="w-[7.5rem] border border-line px-1 py-1 text-right text-xs"
                       />
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-2 py-1.5 text-right">
                       <input
                         type="number"
                         defaultValue={m.amountDue ?? ""}
@@ -112,18 +121,18 @@ export function MilestoneSection({
                             amountDue: e.target.value === "" ? null : Number(e.target.value),
                           })
                         }
-                        className="w-24 border border-line px-1.5 py-1 text-right text-xs"
+                        className="w-16 border border-line px-1 py-1 text-right text-xs"
                       />
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-2 py-1.5 text-right">
                       <input
                         type="date"
                         defaultValue={m.paidDate ?? ""}
                         onBlur={(e) => updateField(m.id, "paid_date", e.target.value, { paidDate: e.target.value || null })}
-                        className="w-32 border border-line px-1.5 py-1 text-right text-xs"
+                        className="w-[7.5rem] border border-line px-1 py-1 text-right text-xs"
                       />
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-2 py-1.5 text-right">
                       <input
                         type="number"
                         defaultValue={m.amountPaid ?? ""}
@@ -132,14 +141,14 @@ export function MilestoneSection({
                             amountPaid: e.target.value === "" ? null : Number(e.target.value),
                           })
                         }
-                        className="w-24 border border-line px-1.5 py-1 text-right text-xs"
+                        className="w-16 border border-line px-1 py-1 text-right text-xs"
                       />
                     </td>
-                    <td className="px-3 py-2 text-left">
+                    <td className="px-2 py-1.5 text-left">
                       <select
                         value={m.status}
                         onChange={(e) => updateField(m.id, "status", e.target.value, { status: e.target.value })}
-                        className="border border-line px-1.5 py-1 text-xs"
+                        className="w-[5.5rem] border border-line px-1 py-1 text-xs"
                       >
                         {STATUSES.map((s) => (
                           <option key={s} value={s}>
@@ -148,20 +157,22 @@ export function MilestoneSection({
                         ))}
                       </select>
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <td className="px-2 py-1.5 text-right whitespace-nowrap">
                       {m.status !== "Paid" && (
                         <button
                           onClick={() => markPaid(m)}
-                          className="mr-2 font-mono text-[11px] text-positive underline underline-offset-2"
+                          title="Mark Paid"
+                          className="mr-1.5 font-mono text-[10px] text-positive underline underline-offset-2"
                         >
-                          Mark Paid
+                          Pay
                         </button>
                       )}
                       <button
                         onClick={() => deleteMilestone(m.id)}
-                        className="font-mono text-[11px] text-warning underline underline-offset-2"
+                        title="Delete"
+                        className="font-mono text-[10px] text-warning underline underline-offset-2"
                       >
-                        Delete
+                        Del
                       </button>
                     </td>
                   </tr>

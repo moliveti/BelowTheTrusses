@@ -58,7 +58,7 @@ export function ProjectsIndex({ projects }: { projects: ProjectListItem[] }) {
                     <div>
                       <Link
                         href={`/projects/${p.id}`}
-                        className="underline decoration-line underline-offset-2 hover:text-brand-primary"
+                        className="text-brand-primary underline decoration-brand-primary/30 underline-offset-2 hover:decoration-brand-primary"
                       >
                         {p.name}
                       </Link>
