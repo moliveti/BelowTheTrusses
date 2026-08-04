@@ -1,4 +1,4 @@
-import type { Assignment, TimeEntry } from "./types";
+import type { TimeEntry } from "./types";
 
 export interface PersonYearData {
   personId: string;
@@ -17,12 +17,9 @@ export function distinctYearsFromEntries(entries: TimeEntry[]): number[] {
   return Array.from(new Set(entries.map((e) => workYearMonth(e.workDate).year))).sort((a, b) => a - b);
 }
 
-export function personBreakdownForYear(
-  entries: TimeEntry[],
-  assignments: Assignment[],
-  year: number
-): PersonYearData[] {
-  const rateByPair = new Map(assignments.map((a) => [`${a.projectId}::${a.subcontractorId}`, a.hourlyRate]));
+// Cost uses each entry's own hourly_rate, frozen at log time
+// (0009_rate_snapshot.sql), not a live lookup — never retroactive.
+export function personBreakdownForYear(entries: TimeEntry[], year: number): PersonYearData[] {
   const byPerson = new Map<string, PersonYearData>();
 
   for (const e of entries) {
@@ -39,9 +36,8 @@ export function personBreakdownForYear(
     }
     const row = byPerson.get(e.subcontractorId)!;
     row.hoursMonthly[month - 1] += e.hours;
-    const rate = rateByPair.get(`${e.projectId}::${e.subcontractorId}`) ?? null;
-    if (rate === null) row.hasUnknownRate = true;
-    else row.costMonthly[month - 1] += e.hours * rate;
+    if (e.hourlyRate === null) row.hasUnknownRate = true;
+    else row.costMonthly[month - 1] += e.hours * e.hourlyRate;
   }
 
   return Array.from(byPerson.values()).sort(

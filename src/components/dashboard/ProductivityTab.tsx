@@ -1,14 +1,14 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import type { Assignment, TimeEntry } from "@/lib/hours/types";
+import type { TimeEntry } from "@/lib/hours/types";
 import { distinctYearsFromEntries, personBreakdownForYear, sumMonthly } from "@/lib/hours/productivity";
 import { fmtUsd, MONTH_LABELS } from "@/lib/dashboard/format";
 
 const fmtHours = (n: number) => (n ? n.toFixed(2) : "—");
 const fmtCost = (n: number) => (n ? fmtUsd(n) : "—");
 
-export function ProductivityTab({ entries, assignments }: { entries: TimeEntry[]; assignments: Assignment[] }) {
+export function ProductivityTab({ entries }: { entries: TimeEntry[] }) {
   const years = distinctYearsFromEntries(entries);
 
   return (
@@ -24,12 +24,12 @@ export function ProductivityTab({ entries, assignments }: { entries: TimeEntry[]
         <>
           <section className="mb-12">
             <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Hours Worked</h3>
-            <PersonYearTable years={years} entries={entries} assignments={assignments} metric="hours" />
+            <PersonYearTable years={years} entries={entries} metric="hours" />
           </section>
 
           <section>
             <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Amount Paid to Contractors &amp; Amy</h3>
-            <PersonYearTable years={years} entries={entries} assignments={assignments} metric="cost" />
+            <PersonYearTable years={years} entries={entries} metric="cost" />
           </section>
         </>
       )}
@@ -40,12 +40,10 @@ export function ProductivityTab({ entries, assignments }: { entries: TimeEntry[]
 function PersonYearTable({
   years,
   entries,
-  assignments,
   metric,
 }: {
   years: number[];
   entries: TimeEntry[];
-  assignments: Assignment[];
   metric: "hours" | "cost";
 }) {
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set());
@@ -79,7 +77,7 @@ function PersonYearTable({
         </thead>
         <tbody>
           {years.map((y) => {
-            const people = personBreakdownForYear(entries, assignments, y);
+            const people = personBreakdownForYear(entries, y);
             const colTotals = sumMonthly(people, key);
             const isOpen = expandedYears.has(y);
             const hasUnknownRate = metric === "cost" && people.some((p) => p.hasUnknownRate);

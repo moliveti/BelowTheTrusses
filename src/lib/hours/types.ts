@@ -7,6 +7,8 @@ export interface TimeEntry {
   workDate: string; // YYYY-MM-DD
   hours: number;
   workDescription: string;
+  /** Rate frozen at the moment this entry was logged — never re-derived later. */
+  hourlyRate: number | null;
 }
 
 export interface ProjectOption {

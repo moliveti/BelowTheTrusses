@@ -135,7 +135,7 @@ export function Dashboard({
           />
         )}
         {tab === "productivity" && (
-          <ProductivityTab entries={contractedWork.timeEntries} assignments={contractedWork.assignments} />
+          <ProductivityTab entries={contractedWork.timeEntries} />
         )}
         {tab === "projects" && <ProjectsIndex projects={projects} />}
         {tab === "sow" && <SowTab rows={data.sow} />}

@@ -4,17 +4,15 @@ import type { ProjectDetail, ProjectListItem } from "./types";
 export async function getProjectsIndex(): Promise<ProjectListItem[]> {
   const supabase = await createClient();
 
-  const [projectsRes, milestonesRes, timeEntriesRes, assignmentsRes] = await Promise.all([
+  const [projectsRes, milestonesRes, timeEntriesRes] = await Promise.all([
     supabase.from("projects").select("id, name, type, active, contract_value, clients(name)").order("name"),
     supabase.from("milestones").select("project_id, amount_due, amount_paid"),
-    supabase.from("subcontractor_time_entries").select("project_id, subcontractor_id, hours"),
-    supabase.from("project_subcontractors").select("project_id, subcontractor_id, hourly_rate"),
+    supabase.from("subcontractor_time_entries").select("project_id, hours, hourly_rate"),
   ]);
 
   if (projectsRes.error) throw new Error(`projects: ${projectsRes.error.message}`);
   if (milestonesRes.error) throw new Error(`milestones: ${milestonesRes.error.message}`);
   if (timeEntriesRes.error) throw new Error(`subcontractor_time_entries: ${timeEntriesRes.error.message}`);
-  if (assignmentsRes.error) throw new Error(`project_subcontractors: ${assignmentsRes.error.message}`);
 
   const billingByProject = new Map<string, { amountDue: number; amountPaid: number }>();
   for (const m of milestonesRes.data ?? []) {
@@ -24,19 +22,15 @@ export async function getProjectsIndex(): Promise<ProjectListItem[]> {
     entry.amountPaid += m.amount_paid ?? 0;
   }
 
-  const rateByPair = new Map<string, number | null>();
-  for (const a of assignmentsRes.data ?? []) {
-    rateByPair.set(`${a.project_id}::${a.subcontractor_id}`, a.hourly_rate);
-  }
-
+  // Cost uses each entry's own rate, frozen at log time (0009_rate_snapshot.sql)
+  // — never the current default/assignment rate — so it's never retroactive.
   const hoursByProject = new Map<string, { hours: number; cost: number; hasUnknownRate: boolean }>();
   for (const e of timeEntriesRes.data ?? []) {
     if (!hoursByProject.has(e.project_id)) hoursByProject.set(e.project_id, { hours: 0, cost: 0, hasUnknownRate: false });
     const entry = hoursByProject.get(e.project_id)!;
     entry.hours += e.hours;
-    const rate = rateByPair.get(`${e.project_id}::${e.subcontractor_id}`) ?? null;
-    if (rate === null) entry.hasUnknownRate = true;
-    else entry.cost += e.hours * rate;
+    if (e.hourly_rate === null) entry.hasUnknownRate = true;
+    else entry.cost += e.hours * e.hourly_rate;
   }
 
   return (projectsRes.data ?? []).map((p) => {
@@ -81,11 +75,11 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
       .order("sequence_order"),
     supabase
       .from("subcontractor_time_entries")
-      .select("subcontractor_id, hours, subcontractors(name)")
+      .select("subcontractor_id, hours, hourly_rate, subcontractors(name)")
       .eq("project_id", id),
     supabase
       .from("project_subcontractors")
-      .select("subcontractor_id, hourly_rate, allocated_hours")
+      .select("subcontractor_id, allocated_hours")
       .eq("project_id", id),
   ]);
 
@@ -100,33 +94,41 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
   const client = Array.isArray(p.clients) ? p.clients[0] : p.clients;
   const referral = Array.isArray(p.referral_sources) ? p.referral_sources[0] : p.referral_sources;
 
-  const assignmentBySub = new Map(
-    (assignmentsRes.data ?? []).map((a) => [a.subcontractor_id, { rate: a.hourly_rate, allocated: a.allocated_hours }])
-  );
+  const allocatedBySub = new Map((assignmentsRes.data ?? []).map((a) => [a.subcontractor_id, a.allocated_hours]));
 
-  const hoursBySub = new Map<string, { name: string; hours: number }>();
+  // Cost uses each entry's own rate, frozen at log time (0009_rate_snapshot.sql),
+  // not a live lookup of the current assignment/default rate — so a rate
+  // change never retroactively re-costs hours already logged. If a person's
+  // rate changed mid-project, `rate` below reflects that by showing null
+  // (varies) rather than picking one arbitrarily.
+  const hoursBySub = new Map<string, { name: string; hours: number; cost: number; hasUnknownRate: boolean; rates: Set<number> }>();
   for (const e of timeEntriesRes.data ?? []) {
     const sub = Array.isArray(e.subcontractors) ? e.subcontractors[0] : e.subcontractors;
     const name = sub?.name ?? "Unknown";
-    if (!hoursBySub.has(e.subcontractor_id)) hoursBySub.set(e.subcontractor_id, { name, hours: 0 });
-    hoursBySub.get(e.subcontractor_id)!.hours += e.hours;
+    if (!hoursBySub.has(e.subcontractor_id)) {
+      hoursBySub.set(e.subcontractor_id, { name, hours: 0, cost: 0, hasUnknownRate: false, rates: new Set() });
+    }
+    const entry = hoursBySub.get(e.subcontractor_id)!;
+    entry.hours += e.hours;
+    if (e.hourly_rate === null) entry.hasUnknownRate = true;
+    else {
+      entry.cost += e.hours * e.hourly_rate;
+      entry.rates.add(e.hourly_rate);
+    }
   }
 
   let hasUnknownRate = false;
   let totalCost = 0;
   const hoursByPerson = Array.from(hoursBySub.entries()).map(([subcontractorId, v]) => {
-    const assignment = assignmentBySub.get(subcontractorId);
-    const rate = assignment?.rate ?? null;
-    const cost = rate !== null ? v.hours * rate : null;
-    if (cost === null) hasUnknownRate = true;
-    else totalCost += cost;
+    if (v.hasUnknownRate) hasUnknownRate = true;
+    totalCost += v.cost;
     return {
       subcontractorId,
       subcontractorName: v.name,
       hours: v.hours,
-      rate,
-      allocatedHours: assignment?.allocated ?? null,
-      cost,
+      rate: v.rates.size === 1 ? v.rates.values().next().value ?? null : null,
+      allocatedHours: allocatedBySub.get(subcontractorId) ?? null,
+      cost: v.hasUnknownRate && v.rates.size === 0 ? null : v.cost,
     };
   });
   hoursByPerson.sort((a, b) => b.hours - a.hours);

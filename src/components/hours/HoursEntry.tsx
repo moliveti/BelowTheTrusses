@@ -76,6 +76,7 @@ export function HoursEntry({
         workDate: data.work_date,
         hours: data.hours,
         workDescription: data.work_description,
+        hourlyRate: null,
       },
       ...prev,
     ]);

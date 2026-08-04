@@ -157,8 +157,8 @@ function CostBySubcontractor({ rows }: { rows: ReturnType<typeof buildCostRows> 
     const entry = bySub.get(r.subcontractorId)!;
     entry.hours += r.hours;
     entry.allocated += r.allocatedHours ?? 0;
-    if (r.cost === null) entry.hasUnknownRate = true;
-    else entry.cost += r.cost;
+    if (r.hasUnknownRate) entry.hasUnknownRate = true;
+    entry.cost += r.cost ?? 0;
   }
   const list = Array.from(bySub.values()).sort((a, b) => b.cost - a.cost);
 
@@ -211,8 +211,8 @@ function CostByProject({ rows }: { rows: ReturnType<typeof buildCostRows> }) {
     }
     const entry = byProject.get(r.projectId)!;
     entry.hours += r.hours;
-    if (r.cost === null) entry.hasUnknownRate = true;
-    else entry.cost += r.cost;
+    if (r.hasUnknownRate) entry.hasUnknownRate = true;
+    entry.cost += r.cost ?? 0;
   }
   const list = Array.from(byProject.values()).sort((a, b) => b.cost - a.cost);
 
@@ -295,7 +295,7 @@ function ManualEntryForm({
         hours: hoursNum,
         work_description: description.trim(),
       })
-      .select("id, work_date, hours, work_description")
+      .select("id, work_date, hours, work_description, hourly_rate")
       .single();
 
     setSaving(false);
@@ -313,6 +313,7 @@ function ManualEntryForm({
       workDate: data.work_date,
       hours: data.hours,
       workDescription: data.work_description,
+      hourlyRate: data.hourly_rate,
     });
     setHours("");
     setDescription("");
