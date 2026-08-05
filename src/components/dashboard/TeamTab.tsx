@@ -12,6 +12,17 @@ function fmtDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
+// A stale/expired session gets bounced by middleware to /login before it
+// ever reaches the API route, which fetch() follows silently — surface
+// that distinctly instead of a confusing generic failure.
+async function errorFromResponse(res: Response): Promise<string> {
+  if (res.redirected && res.url.includes("/login")) {
+    return "Your session expired — refresh the page and sign in again.";
+  }
+  const body = await res.json().catch(() => ({}));
+  return body.error ?? "Something went wrong.";
+}
+
 export function TeamTab({ team }: { team: TeamMember[] }) {
   return (
     <div>
@@ -72,8 +83,7 @@ function UserRow({ member }: { member: TeamMember }) {
     });
     setSavingRole(false);
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setRoleError(body.error ?? "Failed to update role.");
+      setRoleError(await errorFromResponse(res));
       return;
     }
     setRole(newRole);
@@ -94,8 +104,7 @@ function UserRow({ member }: { member: TeamMember }) {
     });
     setSavingPassword(false);
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setPasswordError(body.error ?? "Failed to update password.");
+      setPasswordError(await errorFromResponse(res));
       return;
     }
     setPassword("");
@@ -201,8 +210,7 @@ function NewUserForm() {
     setSaving(false);
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? "Failed to create user.");
+      setError(await errorFromResponse(res));
       return;
     }
 
