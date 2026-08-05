@@ -7,6 +7,7 @@ import { KpiRow } from "./KpiRow";
 import { YoyChart } from "./YoyChart";
 import { BreakdownTable } from "./BreakdownTable";
 import { BusinessMix, type MixPeriod } from "./BusinessMix";
+import { InsightsBlurb } from "./InsightsBlurb";
 
 export function FinancialDashboardTab({
   rows,
@@ -67,6 +68,8 @@ export function FinancialDashboardTab({
           currentYear={currentYear}
         />
       </section>
+
+      <InsightsBlurb />
 
       <section className="mb-12">
         <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
