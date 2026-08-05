@@ -603,20 +603,25 @@ function LeadIntakeForm({
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Tentative Timeline</label>
-        <div className="flex items-center gap-1.5">
-          <input
-            type="month"
-            value={timelineStart}
-            onChange={(e) => setTimelineStart(e.target.value)}
-            className="w-full border border-line px-2 py-1.5 text-xs"
-          />
-          <span className="text-ink/40">–</span>
-          <input
-            type="month"
-            value={timelineEnd}
-            onChange={(e) => setTimelineEnd(e.target.value)}
-            className="w-full border border-line px-2 py-1.5 text-xs"
-          />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="w-7 flex-shrink-0 text-[10px] text-ink/40">From</span>
+            <input
+              type="month"
+              value={timelineStart}
+              onChange={(e) => setTimelineStart(e.target.value)}
+              className="w-full border border-line px-2 py-1.5 text-xs"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-7 flex-shrink-0 text-[10px] text-ink/40">To</span>
+            <input
+              type="month"
+              value={timelineEnd}
+              onChange={(e) => setTimelineEnd(e.target.value)}
+              className="w-full border border-line px-2 py-1.5 text-xs"
+            />
+          </div>
         </div>
       </div>
       <div>
@@ -755,26 +760,31 @@ function LeadEditPanel({
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Tentative Timeline</label>
-        <div className="flex items-center gap-1.5">
-          <input
-            type="month"
-            defaultValue={monthInputValue(lead.timelineStartMonth)}
-            onBlur={(e) => {
-              const date = monthInputToDate(e.target.value);
-              update("timeline_start_month", date, { timelineStartMonth: date });
-            }}
-            className="w-full border border-line px-2 py-1.5 text-xs"
-          />
-          <span className="text-ink/40">–</span>
-          <input
-            type="month"
-            defaultValue={monthInputValue(lead.timelineEndMonth)}
-            onBlur={(e) => {
-              const date = monthInputToDate(e.target.value);
-              update("timeline_end_month", date, { timelineEndMonth: date });
-            }}
-            className="w-full border border-line px-2 py-1.5 text-xs"
-          />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="w-7 flex-shrink-0 text-[10px] text-ink/40">From</span>
+            <input
+              type="month"
+              defaultValue={monthInputValue(lead.timelineStartMonth)}
+              onBlur={(e) => {
+                const date = monthInputToDate(e.target.value);
+                update("timeline_start_month", date, { timelineStartMonth: date });
+              }}
+              className="w-full border border-line px-2 py-1.5 text-xs"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-7 flex-shrink-0 text-[10px] text-ink/40">To</span>
+            <input
+              type="month"
+              defaultValue={monthInputValue(lead.timelineEndMonth)}
+              onBlur={(e) => {
+                const date = monthInputToDate(e.target.value);
+                update("timeline_end_month", date, { timelineEndMonth: date });
+              }}
+              className="w-full border border-line px-2 py-1.5 text-xs"
+            />
+          </div>
         </div>
       </div>
       <div>
