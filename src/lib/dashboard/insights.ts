@@ -28,6 +28,8 @@ export interface YoyInsightFacts {
     topReferral: { name: string; amount: number } | null;
   } | null;
   biggestForecastMonth: { month: string; amount: number; topCategory: ProjectType | null } | null;
+  totalOutstanding: number;
+  currentYearForecastByMonth: { month: string; amount: number }[];
 }
 
 function monthlyReferralAmounts(rows: RevenueRow[], year: number, month: number, referralSources: ReferralSource[]) {
@@ -101,6 +103,14 @@ export function computeYoyInsightFacts(data: DashboardData, currentYear: number)
     }
   }
 
+  // "How much is still left to be paid" — every outstanding milestone
+  // balance regardless of year, not just the current-year slice used above.
+  const totalOutstanding = [...data.forecast].reduce((sum, r) => sum + r.amount, 0);
+
+  const currentYearForecastByMonth = forecastMonthly
+    .map((amount, i) => ({ month: MONTH_NAMES[i], amount }))
+    .filter((m) => m.amount > 0);
+
   return {
     currentYear,
     priorYear,
@@ -110,5 +120,7 @@ export function computeYoyInsightFacts(data: DashboardData, currentYear: number)
     categoryTrends,
     biggestSwing,
     biggestForecastMonth,
+    totalOutstanding,
+    currentYearForecastByMonth,
   };
 }
