@@ -5,10 +5,24 @@ import type { RevenueRow, ReferralSource } from "@/lib/dashboard/types";
 import { referralTotals } from "@/lib/dashboard/aggregate";
 import { fmtUsd } from "@/lib/dashboard/format";
 
-export function ReferralList({ rows, referralSources }: { rows: RevenueRow[]; referralSources: ReferralSource[] }) {
+export function ReferralList({
+  collectedRows,
+  forecastRows,
+  referralSources,
+}: {
+  collectedRows: RevenueRow[];
+  forecastRows: RevenueRow[];
+  referralSources: ReferralSource[];
+}) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const totals = referralTotals(rows, referralSources);
-  const maxTotal = totals.length ? totals[0].total : 1;
+  const collectedTotals = referralTotals(collectedRows, referralSources);
+  const forecastTotals = referralTotals(forecastRows, referralSources);
+  const forecastById = new Map(forecastTotals.map((f) => [f.id, f.total]));
+
+  const totals = collectedTotals
+    .map((r) => ({ ...r, forecast: forecastById.get(r.id) ?? 0 }))
+    .sort((a, b) => b.total + b.forecast - (a.total + a.forecast));
+  const maxTotal = totals.length ? totals[0].total + totals[0].forecast : 1;
 
   if (totals.length === 0) {
     return <div className="text-sm text-ink/50">No referral-sourced revenue yet.</div>;
@@ -28,6 +42,7 @@ export function ReferralList({ rows, referralSources }: { rows: RevenueRow[]; re
       {totals.map((r) => {
         const years = Object.keys(r.byYear).map(Number).sort((a, b) => a - b);
         const isOpen = expanded.has(r.id);
+        const grandTotal = r.total + r.forecast;
         return (
           <div key={r.id} className="border-b border-line py-1.5">
             <button
@@ -35,14 +50,14 @@ export function ReferralList({ rows, referralSources }: { rows: RevenueRow[]; re
               className="flex w-full items-center gap-2.5 text-left text-[13px]"
             >
               <div className="w-[150px] flex-shrink-0 truncate">{r.name}</div>
-              <div className="relative h-3.5 flex-1 border border-line bg-canvas">
-                <div
-                  className="h-full bg-brand-accent"
-                  style={{ width: `${Math.round((r.total / maxTotal) * 100)}%` }}
-                />
+              <div className="relative flex h-3.5 flex-1 border border-line bg-canvas">
+                <div className="h-full bg-brand-accent" style={{ width: `${Math.round((r.total / maxTotal) * 100)}%` }} />
+                {r.forecast > 0 && (
+                  <div className="h-full bg-brand-accent/35" style={{ width: `${Math.round((r.forecast / maxTotal) * 100)}%` }} />
+                )}
               </div>
               <div className="w-20 flex-shrink-0 text-right font-mono text-[11.5px] tabular-nums text-ink/60">
-                {fmtUsd(r.total)}
+                {fmtUsd(grandTotal)}
               </div>
             </button>
             {isOpen && (

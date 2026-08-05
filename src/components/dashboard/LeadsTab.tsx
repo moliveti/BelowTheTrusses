@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead, LeadStatus } from "@/lib/leads/types";
 import type { ReferralSource } from "@/lib/dashboard/types";
@@ -424,12 +424,12 @@ function ReferralSourceSelect({
       className="w-full border border-line px-2 py-1.5 text-xs"
     >
       <option value="">—</option>
+      <option value={NEW_SOURCE_SENTINEL}>+ New Source</option>
       {referralSources.map((r) => (
         <option key={r.id} value={r.id}>
           {r.name}
         </option>
       ))}
-      <option value={NEW_SOURCE_SENTINEL}>+ Add new source…</option>
     </select>
   );
 }
@@ -453,20 +453,50 @@ function LeadIntakeForm({
   const [timelineStart, setTimelineStart] = useState("");
   const [timelineEnd, setTimelineEnd] = useState("");
   const [referralSourceId, setReferralSourceId] = useState("");
+  const [newSourceName, setNewSourceName] = useState("");
+  const [newSourceType, setNewSourceType] = useState<(typeof REFERRAL_TYPES)[number]>("Other");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [savedMessage, setSavedMessage] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const isNewSource = referralSourceId === NEW_SOURCE_SENTINEL;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setSavedMessage(false);
     if (!name.trim()) return setError("Name is required.");
+    if (isNewSource && !newSourceName.trim()) return setError("Enter a name for the new referral source.");
+
+    setSaving(true);
+    const supabase = createClient();
+
+    let finalReferralSourceId = isNewSource ? null : referralSourceId || null;
+    let finalReferralSourceName: string | null = null;
+
+    if (isNewSource) {
+      const { data: sourceData, error: sourceError } = await supabase
+        .from("referral_sources")
+        .insert({ name: newSourceName.trim(), type: newSourceType })
+        .select("id, name, type")
+        .single();
+      if (sourceError) {
+        setSaving(false);
+        setError(sourceError.message);
+        return;
+      }
+      onSourceCreated(sourceData);
+      finalReferralSourceId = sourceData.id;
+      finalReferralSourceName = sourceData.name;
+    } else {
+      finalReferralSourceName = referralSources.find((r) => r.id === referralSourceId)?.name ?? null;
+    }
 
     const timelineStartMonth = monthInputToDate(timelineStart);
     const timelineEndMonth = monthInputToDate(timelineEnd);
 
-    setSaving(true);
-    const supabase = createClient();
     const { data, error: insertError } = await supabase
       .from("leads")
       .insert({
@@ -479,7 +509,7 @@ function LeadIntakeForm({
         budget_range: budgetRange.trim() || null,
         timeline_start_month: timelineStartMonth,
         timeline_end_month: timelineEndMonth,
-        referral_source_id: referralSourceId || null,
+        referral_source_id: finalReferralSourceId,
         notes: notes.trim() || null,
       })
       .select("id, created_at")
@@ -491,7 +521,6 @@ function LeadIntakeForm({
       return;
     }
 
-    const referral = referralSources.find((r) => r.id === referralSourceId);
     onAdded({
       id: data.id,
       name: name.trim(),
@@ -503,8 +532,8 @@ function LeadIntakeForm({
       budgetRange: budgetRange.trim() || null,
       timelineStartMonth,
       timelineEndMonth,
-      referralSourceId: referralSourceId || null,
-      referralSourceName: referral?.name ?? null,
+      referralSourceId: finalReferralSourceId,
+      referralSourceName: finalReferralSourceName,
       notes: notes.trim() || null,
       status: "New",
       lastContactedDate: null,
@@ -523,7 +552,13 @@ function LeadIntakeForm({
     setTimelineStart("");
     setTimelineEnd("");
     setReferralSourceId("");
+    setNewSourceName("");
+    setNewSourceType("Other");
     setNotes("");
+
+    setSavedMessage(true);
+    clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSavedMessage(false), 3000);
   }
 
   return (
@@ -586,12 +621,41 @@ function LeadIntakeForm({
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Referral Source</label>
-        <ReferralSourceSelect
-          referralSources={referralSources}
+        <select
           value={referralSourceId}
-          onChange={(id) => setReferralSourceId(id)}
-          onSourceCreated={onSourceCreated}
-        />
+          onChange={(e) => setReferralSourceId(e.target.value)}
+          className="w-full border border-line px-2 py-1.5 text-xs"
+        >
+          <option value="">—</option>
+          <option value={NEW_SOURCE_SENTINEL}>+ New Source</option>
+          {referralSources.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+        {isNewSource && (
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <input
+              autoFocus
+              value={newSourceName}
+              onChange={(e) => setNewSourceName(e.target.value)}
+              placeholder="New source name"
+              className="w-full border border-line px-2 py-1.5 text-xs"
+            />
+            <select
+              value={newSourceType}
+              onChange={(e) => setNewSourceType(e.target.value as (typeof REFERRAL_TYPES)[number])}
+              className="border border-line px-1 py-1.5 text-xs"
+            >
+              {REFERRAL_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Notes</label>
@@ -607,6 +671,7 @@ function LeadIntakeForm({
           {saving ? "Adding…" : "Add lead"}
         </button>
         {error && <span className="ml-3 text-xs text-warning">{error}</span>}
+        {savedMessage && <span className="ml-3 text-xs text-positive">✓ Lead saved</span>}
       </div>
     </form>
   );

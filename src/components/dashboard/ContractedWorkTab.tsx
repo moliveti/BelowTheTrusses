@@ -59,10 +59,11 @@ export function ContractedWorkTab({
     if (!error) setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
+  // "assignments" sub-tab is hidden for now (not currently useful) but the
+  // tab/content logic below is left in place in case it's wanted again.
   const SUB_TABS: { key: typeof subTab; label: string }[] = [
     { key: "overview", label: "Contracted Work" },
     { key: "time", label: "Subcontractor Time Input" },
-    { key: "assignments", label: "Project Assignments" },
   ];
 
   return (

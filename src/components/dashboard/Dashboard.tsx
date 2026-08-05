@@ -123,7 +123,13 @@ export function Dashboard({
         )}
         {tab === "leads" && <LeadsTab leads={leads} referralSources={data.referralSources} />}
         {tab === "referrals" && (
-          <ReferralsTab rows={rows} referralSources={data.referralSources} mode={mode} onModeChange={setMode} />
+          <ReferralsTab
+            collectedRows={data.collected}
+            forecastRows={data.forecast}
+            referralSources={data.referralSources}
+            mode={mode}
+            onModeChange={setMode}
+          />
         )}
         {tab === "contracted" && (
           <ContractedWorkTab

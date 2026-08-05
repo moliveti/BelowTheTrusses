@@ -5,12 +5,14 @@ import { ModeToggle } from "./ModeToggle";
 import { ReferralList } from "./ReferralList";
 
 export function ReferralsTab({
-  rows,
+  collectedRows,
+  forecastRows,
   referralSources,
   mode,
   onModeChange,
 }: {
-  rows: RevenueRow[];
+  collectedRows: RevenueRow[];
+  forecastRows: RevenueRow[];
   referralSources: ReferralSource[];
   mode: RevenueMode;
   onModeChange: (mode: RevenueMode) => void;
@@ -23,8 +25,13 @@ export function ReferralsTab({
       </div>
       <p className="mb-4 text-xs text-ink/60">
         Lifetime totals by referrer — click a row to see its year-over-year breakdown.
+        {mode === "revenue_forecast" && " The lighter segment is still-outstanding forecast, not yet collected."}
       </p>
-      <ReferralList rows={rows} referralSources={referralSources} />
+      <ReferralList
+        collectedRows={collectedRows}
+        forecastRows={mode === "revenue_forecast" ? forecastRows : []}
+        referralSources={referralSources}
+      />
     </div>
   );
 }
