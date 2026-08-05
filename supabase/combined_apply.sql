@@ -641,3 +641,9 @@ where e.hourly_rate is null;
 alter table leads drop column timeline;
 alter table leads add column timeline_start_month date;
 alter table leads add column timeline_end_month date;
+
+-- ---------------------------------------------------------------------------
+-- 0011: scope tags track percent of revenue, not a standalone dollar amount
+-- ---------------------------------------------------------------------------
+
+alter table project_scope_tags drop column amount;

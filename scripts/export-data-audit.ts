@@ -56,7 +56,7 @@ async function main() {
     supabase.from("clients").select("id, name"),
     supabase.from("referral_sources").select("id, name"),
     supabase.from("scope_tags").select("id, name"),
-    supabase.from("project_scope_tags").select("project_id, scope_tag_id, amount"),
+    supabase.from("project_scope_tags").select("project_id, scope_tag_id, percent_of_revenue"),
     supabase.from("subcontractors").select("id, name").order("name"),
     supabase.from("project_subcontractors").select("project_id, subcontractor_id, hourly_rate, allocated_hours"),
   ]);
@@ -79,11 +79,14 @@ async function main() {
   const scopeTagNameById = new Map((scopeTagsRes.data ?? []).map((s) => [s.id, s.name]));
   const subcontractors = subsRes.data ?? [];
 
+  // Percentages stored as 0-1 in the DB; the sheet shows 0-100 for readability.
   const projectScopeByProject = new Map<string, Map<string, number>>();
   for (const ps of projectScopeRes.data ?? []) {
     if (!projectScopeByProject.has(ps.project_id)) projectScopeByProject.set(ps.project_id, new Map());
     const name = scopeTagNameById.get(ps.scope_tag_id) ?? "Unknown";
-    projectScopeByProject.get(ps.project_id)!.set(name, ps.amount);
+    if (ps.percent_of_revenue !== null) {
+      projectScopeByProject.get(ps.project_id)!.set(name, ps.percent_of_revenue * 100);
+    }
   }
 
   const assignmentsByProject = new Map<
@@ -120,7 +123,8 @@ async function main() {
     ["", false],
     ["Sheets:", true],
     ["  Projects — one row per project: dates, planned revenue, billing terms, state, notes.", false],
-    ["  Scope Tags (Residential) — dollar breakdown by scope category, Residential projects only.", false],
+    ["  Scope Tags (Residential) — percent of the project's total contract value by category,", false],
+    ["    Residential projects only. Each project's row should add up to 100%.", false],
     ["  Subcontractor Assignments — one blank row per active project; add a Subcontractor,", false],
     ["    Hourly Rate, and Allocated Hours. Duplicate the row if more than one person works a project.", false],
     ["", false],
@@ -197,18 +201,20 @@ async function main() {
 
   // ---------- Scope Tags (Residential) ----------
   const scopeSheet = wb.addWorksheet("Scope Tags (Residential)");
-  const scopeHeaders = ["Client", "Project", ...SCOPE_CATEGORIES.map((c) => `${c} ($)`), "Notes"];
+  const scopeHeaders = ["Client", "Project", ...SCOPE_CATEGORIES.map((c) => `${c} (%)`), "Total (%)", "Notes"];
   headerRow(scopeSheet, scopeHeaders);
   scopeSheet.columns = scopeHeaders.map((h) => ({ width: Math.max(14, Math.min(24, h.length + 2)) }));
 
   for (const p of projects.filter((proj) => proj.type === "Residential")) {
     const existing = projectScopeByProject.get(p.id) ?? new Map<string, number>();
     const values = SCOPE_CATEGORIES.map((cat) => existing.get(cat) ?? "");
-    const row = scopeSheet.addRow([clientNameById.get(p.client_id) ?? "", p.name, ...values, ""]);
+    const total = values.reduce((s: number, v) => s + (typeof v === "number" ? v : 0), 0);
+    const row = scopeSheet.addRow([clientNameById.get(p.client_id) ?? "", p.name, ...values, total || "", ""]);
     row.eachCell((cell) => (cell.font = FONT));
     values.forEach((v, i) => {
       if (v === "") markFillable(row.getCell(3 + i));
     });
+    if (Math.abs(total - 100) > 0.5) markFillable(row.getCell(3 + values.length));
   }
 
   // ---------- Subcontractor Assignments ----------

@@ -56,7 +56,7 @@ export async function getProjectsIndex(): Promise<ProjectListItem[]> {
 export async function getProjectDetail(id: string): Promise<ProjectDetail | null> {
   const supabase = await createClient();
 
-  const [projectRes, scopeTagsRes, milestonesRes, timeEntriesRes, assignmentsRes] = await Promise.all([
+  const [projectRes, allScopeTagsRes, scopeTagsRes, milestonesRes, timeEntriesRes, assignmentsRes] = await Promise.all([
     supabase
       .from("projects")
       .select(
@@ -67,7 +67,8 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
       )
       .eq("id", id)
       .maybeSingle(),
-    supabase.from("project_scope_tags").select("amount, scope_tags(name)").eq("project_id", id),
+    supabase.from("scope_tags").select("id, name").order("name"),
+    supabase.from("project_scope_tags").select("scope_tag_id, percent_of_revenue").eq("project_id", id),
     supabase
       .from("milestones")
       .select("id, name, sequence_order, due_date, amount_due, paid_date, amount_paid, status")
@@ -85,6 +86,7 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
 
   if (projectRes.error) throw new Error(`projects: ${projectRes.error.message}`);
   if (!projectRes.data) return null;
+  if (allScopeTagsRes.error) throw new Error(`scope_tags: ${allScopeTagsRes.error.message}`);
   if (scopeTagsRes.error) throw new Error(`project_scope_tags: ${scopeTagsRes.error.message}`);
   if (milestonesRes.error) throw new Error(`milestones: ${milestonesRes.error.message}`);
   if (timeEntriesRes.error) throw new Error(`subcontractor_time_entries: ${timeEntriesRes.error.message}`);
@@ -146,10 +148,12 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
 
   const totalCollected = milestones.reduce((s, m) => s + (m.amountPaid ?? 0), 0);
 
-  const scopeTags = (scopeTagsRes.data ?? []).map((s) => {
-    const tag = Array.isArray(s.scope_tags) ? s.scope_tags[0] : s.scope_tags;
-    return { name: tag?.name ?? "Unknown", amount: s.amount };
-  });
+  const percentByScopeTag = new Map((scopeTagsRes.data ?? []).map((s) => [s.scope_tag_id, s.percent_of_revenue]));
+  const scopeTags = (allScopeTagsRes.data ?? []).map((tag) => ({
+    id: tag.id,
+    name: tag.name,
+    percentOfRevenue: percentByScopeTag.get(tag.id) ?? null,
+  }));
 
   return {
     id: p.id,

@@ -5,6 +5,7 @@ import { getMyRole } from "@/lib/profile";
 import { getProjectDetail } from "@/lib/projects/queries";
 import { SignOutButton } from "@/components/SignOutButton";
 import { MilestoneSection } from "@/components/projects/MilestoneSection";
+import { ScopeSection } from "@/components/projects/ScopeSection";
 import { fmtUsd } from "@/lib/dashboard/format";
 
 const fmtDate = (d: string | null) => d ?? "—";
@@ -88,30 +89,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">
           Scope
         </h3>
-        {project.scopeTags.length === 0 ? (
-          <div className="border border-line bg-surface p-4 text-sm text-ink/50">
-            {project.type === "Residential" ? "Not tagged yet." : "Scope tracking applies to Residential projects only."}
-          </div>
-        ) : (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr className="border-b-2 border-ink">
-                  <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Category</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {project.scopeTags.map((s) => (
-                  <tr key={s.name} className="border-b border-line">
-                    <td className="px-3 py-2">{s.name}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{s.amount !== null ? fmtUsd(s.amount) : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <ScopeSection
+          projectId={project.id}
+          initialScopeTags={project.scopeTags}
+          contractValue={project.contractValue}
+          projectType={project.type}
+        />
       </section>
 
       <MilestoneSection

@@ -12,9 +12,11 @@ export interface ProjectListItem {
   outstandingBalance: number;
 }
 
-export interface ScopeTagAmount {
+export interface ScopeTagPercent {
+  id: string;
   name: string;
-  amount: number | null;
+  /** Share of the project's total contract value, 0-1. Should sum to 1 across a project's tags. */
+  percentOfRevenue: number | null;
 }
 
 export interface MilestoneRow {
@@ -58,7 +60,7 @@ export interface ProjectDetail {
   startDate: string | null;
   targetCompletionDate: string | null;
   actualCompletionDate: string | null;
-  scopeTags: ScopeTagAmount[];
+  scopeTags: ScopeTagPercent[];
   milestones: MilestoneRow[];
   hoursByPerson: ProjectHourRow[];
   totalCollected: number;
