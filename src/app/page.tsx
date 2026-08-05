@@ -10,6 +10,7 @@ import {
 } from "@/lib/hours/queries";
 import { getProjectsIndex } from "@/lib/projects/queries";
 import { getLeads } from "@/lib/leads/queries";
+import { getMilestoneTemplates } from "@/lib/milestoneTemplates/queries";
 import { getMyRole } from "@/lib/profile";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 
@@ -24,16 +25,18 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, timeEntries, subcontractors, activeProjects, assignments, projects, rates, leads] = await Promise.all([
-    getDashboardData(),
-    getAllTimeEntriesForAdmin(),
-    getAllSubcontractorOptions(),
-    getAllActiveProjectOptions(),
-    getProjectSubcontractorAssignments(),
-    getProjectsIndex(),
-    getSubcontractorRates(),
-    getLeads(),
-  ]);
+  const [data, timeEntries, subcontractors, activeProjects, assignments, projects, rates, leads, milestoneTemplates] =
+    await Promise.all([
+      getDashboardData(),
+      getAllTimeEntriesForAdmin(),
+      getAllSubcontractorOptions(),
+      getAllActiveProjectOptions(),
+      getProjectSubcontractorAssignments(),
+      getProjectsIndex(),
+      getSubcontractorRates(),
+      getLeads(),
+      getMilestoneTemplates(),
+    ]);
 
   return (
     <Dashboard
@@ -42,6 +45,7 @@ export default async function HomePage() {
       contractedWork={{ timeEntries, subcontractors, activeProjects, assignments, rates }}
       projects={projects}
       leads={leads}
+      milestoneTemplates={milestoneTemplates}
     />
   );
 }

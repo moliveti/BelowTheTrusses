@@ -1,4 +1,10 @@
-export type LeadStatus = "New" | "Contacted" | "Qualified" | "Converted" | "Lost";
+export type LeadStatus =
+  | "New Prospect"
+  | "Quote Sent"
+  | "Contract Submitted"
+  | "Signed Contract"
+  | "Lost"
+  | "Business Not Materialized";
 
 export interface Lead {
   id: string;

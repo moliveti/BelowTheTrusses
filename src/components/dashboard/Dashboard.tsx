@@ -7,6 +7,7 @@ import type { DashboardData, RevenueMode } from "@/lib/dashboard/types";
 import type { Assignment, ProjectOption, SubcontractorOption, SubcontractorRates, TimeEntry } from "@/lib/hours/types";
 import type { ProjectListItem } from "@/lib/projects/types";
 import type { Lead } from "@/lib/leads/types";
+import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
@@ -44,12 +45,14 @@ export function Dashboard({
   contractedWork,
   projects,
   leads,
+  milestoneTemplates,
 }: {
   data: DashboardData;
   userEmail: string | undefined;
   contractedWork: ContractedWorkData;
   projects: ProjectListItem[];
   leads: Lead[];
+  milestoneTemplates: MilestoneTemplateGroup[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -119,7 +122,9 @@ export function Dashboard({
             currentMonth={currentMonth}
           />
         )}
-        {tab === "leads" && <LeadsTab leads={leads} referralSources={data.referralSources} />}
+        {tab === "leads" && (
+          <LeadsTab leads={leads} referralSources={data.referralSources} milestoneTemplates={milestoneTemplates} />
+        )}
         {tab === "referrals" && (
           <ReferralsTab
             collectedRows={data.collected}

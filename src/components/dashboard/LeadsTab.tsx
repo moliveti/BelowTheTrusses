@@ -4,11 +4,20 @@ import { useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead, LeadStatus } from "@/lib/leads/types";
 import type { ReferralSource } from "@/lib/dashboard/types";
+import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import { toIsoDate } from "@/lib/hours/dates";
 import { SCOPE_CATEGORIES } from "@/lib/scope";
+import { ProjectKickoffPanel } from "./ProjectKickoffPanel";
 
-const STATUSES: LeadStatus[] = ["New", "Contacted", "Qualified", "Converted", "Lost"];
-const OPEN_STATUSES: LeadStatus[] = ["New", "Contacted", "Qualified"];
+const STATUSES: LeadStatus[] = [
+  "New Prospect",
+  "Quote Sent",
+  "Contract Submitted",
+  "Signed Contract",
+  "Lost",
+  "Business Not Materialized",
+];
+const OPEN_STATUSES: LeadStatus[] = ["New Prospect", "Quote Sent", "Contract Submitted"];
 const TYPES = ["Residential", "Commercial", "Furniture"] as const;
 const REFERRAL_TYPES = ["Past Client", "Realtor", "Vendor", "Other"] as const;
 const NEW_SOURCE_SENTINEL = "__new__";
@@ -54,9 +63,11 @@ function formatTimelineRange(start: string | null, end: string | null): string |
 export function LeadsTab({
   leads: initialLeads,
   referralSources: initialReferralSources,
+  milestoneTemplates,
 }: {
   leads: Lead[];
   referralSources: ReferralSource[];
+  milestoneTemplates: MilestoneTemplateGroup[];
 }) {
   const [leads, setLeads] = useState(initialLeads);
   const [referralSources, setReferralSources] = useState(initialReferralSources);
@@ -64,6 +75,7 @@ export function LeadsTab({
   const [sortField, setSortField] = useState<SortField>("days");
   const [sortAsc, setSortAsc] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [kickoffLead, setKickoffLead] = useState<Lead | null>(null);
 
   function upsertLead(lead: Lead) {
     setLeads((prev) => [lead, ...prev]);
@@ -82,21 +94,6 @@ export function LeadsTab({
     const today = toIsoDate(new Date());
     const { error } = await supabase.from("leads").update({ last_contacted_date: today }).eq("id", id);
     if (!error) patchLead(id, { lastContactedDate: today });
-  }
-
-  async function convertToSow(lead: Lead) {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("sow_sent")
-      .insert({ date_sent: toIsoDate(new Date()), prospect_name: lead.name, notes: lead.notes, status: "Open" })
-      .select("id")
-      .single();
-    if (error) return;
-    const { error: updateError } = await supabase
-      .from("leads")
-      .update({ status: "Converted", converted_sow_id: data.id })
-      .eq("id", lead.id);
-    if (!updateError) patchLead(lead.id, { status: "Converted", convertedSowId: data.id });
   }
 
   const filtered = useMemo(() => {
@@ -164,7 +161,7 @@ export function LeadsTab({
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
             className="border border-line px-2 py-1 text-xs"
           >
-            <option value="active">Active (excludes Converted/Lost)</option>
+            <option value="active">Active (excludes Signed/Lost/Not Materialized)</option>
             <option value="all">All statuses</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -240,7 +237,7 @@ export function LeadsTab({
                               referralSources={referralSources}
                               onPatch={(patch) => patchLead(lead.id, patch)}
                               onMarkContacted={() => markContacted(lead.id)}
-                              onConvert={() => convertToSow(lead)}
+                              onSignedContractRequested={() => setKickoffLead(lead)}
                               onSourceCreated={handleSourceCreated}
                             />
                           </td>
@@ -254,6 +251,18 @@ export function LeadsTab({
           </div>
         )}
       </section>
+
+      {kickoffLead && (
+        <ProjectKickoffPanel
+          lead={kickoffLead}
+          milestoneTemplates={milestoneTemplates}
+          onClose={() => setKickoffLead(null)}
+          onCreated={(projectId) => {
+            patchLead(kickoffLead.id, { status: "Signed Contract", convertedProjectId: projectId });
+            setKickoffLead(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -535,7 +544,7 @@ function LeadIntakeForm({
       referralSourceId: finalReferralSourceId,
       referralSourceName: finalReferralSourceName,
       notes: notes.trim() || null,
-      status: "New",
+      status: "New Prospect",
       lastContactedDate: null,
       createdAt: data.created_at,
       convertedSowId: null,
@@ -687,20 +696,75 @@ function LeadEditPanel({
   referralSources,
   onPatch,
   onMarkContacted,
-  onConvert,
+  onSignedContractRequested,
   onSourceCreated,
 }: {
   lead: Lead;
   referralSources: ReferralSource[];
   onPatch: (patch: Partial<Lead>) => void;
   onMarkContacted: () => void;
-  onConvert: () => void;
+  onSignedContractRequested: () => void;
   onSourceCreated: (source: ReferralSource) => void;
 }) {
+  const [statusError, setStatusError] = useState("");
+
   async function update(column: string, value: string | string[] | null, patch: Partial<Lead>) {
     const supabase = createClient();
     const { error } = await supabase.from("leads").update({ [column]: value }).eq("id", lead.id);
     if (!error) onPatch(patch);
+  }
+
+  // Quote Sent / Lost / Business Not Materialized keep the separate "Business
+  // Not Materialized" tab (sow_sent-backed) in sync without merging the two
+  // systems: a quote going out or falling through updates or creates the
+  // linked sow_sent row alongside the lead's own status.
+  async function handleStatusChange(newStatus: LeadStatus) {
+    if (newStatus === "Signed Contract") {
+      onSignedContractRequested();
+      return;
+    }
+
+    setStatusError("");
+    const supabase = createClient();
+    const { error } = await supabase.from("leads").update({ status: newStatus }).eq("id", lead.id);
+    if (error) {
+      setStatusError(error.message);
+      return;
+    }
+    onPatch({ status: newStatus });
+
+    if (newStatus === "Quote Sent" && !lead.convertedSowId) {
+      const { data, error: sowError } = await supabase
+        .from("sow_sent")
+        .insert({ date_sent: toIsoDate(new Date()), prospect_name: lead.name, notes: lead.notes, status: "Open" })
+        .select("id")
+        .single();
+      if (!sowError) {
+        await supabase.from("leads").update({ converted_sow_id: data.id }).eq("id", lead.id);
+        onPatch({ convertedSowId: data.id });
+      }
+    } else if (newStatus === "Lost" && lead.convertedSowId) {
+      await supabase.from("sow_sent").update({ status: "Declined" }).eq("id", lead.convertedSowId);
+    } else if (newStatus === "Business Not Materialized") {
+      if (lead.convertedSowId) {
+        await supabase.from("sow_sent").update({ status: "Declined" }).eq("id", lead.convertedSowId);
+      } else {
+        const { data, error: sowError } = await supabase
+          .from("sow_sent")
+          .insert({
+            date_sent: toIsoDate(new Date()),
+            prospect_name: lead.name,
+            notes: lead.notes,
+            status: "Declined",
+          })
+          .select("id")
+          .single();
+        if (!sowError) {
+          await supabase.from("leads").update({ converted_sow_id: data.id }).eq("id", lead.id);
+          onPatch({ convertedSowId: data.id });
+        }
+      }
+    }
   }
 
   return (
@@ -801,8 +865,8 @@ function LeadEditPanel({
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Status</label>
         <select
-          defaultValue={lead.status}
-          onChange={(e) => update("status", e.target.value, { status: e.target.value as LeadStatus })}
+          value={lead.status}
+          onChange={(e) => handleStatusChange(e.target.value as LeadStatus)}
           className="w-full border border-line px-2 py-1.5 text-xs"
         >
           {STATUSES.map((s) => (
@@ -811,6 +875,7 @@ function LeadEditPanel({
             </option>
           ))}
         </select>
+        {statusError && <span className="mt-1 block text-[10px] text-warning">{statusError}</span>}
       </div>
 
       <div className="col-span-2 sm:col-span-4">
@@ -829,14 +894,6 @@ function LeadEditPanel({
         >
           Mark Contacted Today
         </button>
-        {!lead.convertedSowId && lead.status !== "Converted" && lead.status !== "Lost" && (
-          <button
-            onClick={onConvert}
-            className="font-mono text-[11px] uppercase text-brand-primary underline underline-offset-2"
-          >
-            Convert to SOW
-          </button>
-        )}
         {lead.lastContactedDate && (
           <span className="ml-auto font-mono text-[10px] text-ink/40">Last contacted {lead.lastContactedDate}</span>
         )}

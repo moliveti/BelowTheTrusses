@@ -68,7 +68,13 @@ export function ProjectsIndex({ projects }: { projects: ProjectListItem[] }) {
                   <td className="px-3 py-2.5 text-left">
                     <div className={`font-mono text-[11px] ${TYPE_CLASS[p.type] ?? ""}`}>{p.type}</div>
                     <div className="font-mono text-[10px] uppercase">
-                      {p.active ? <span className="text-positive">Active</span> : <span className="text-ink/40">Inactive</span>}
+                      {p.active ? (
+                        <span className="text-positive">Active</span>
+                      ) : (
+                        <span className="text-ink/40">
+                          {p.plannedRevenue !== null && p.amountPaid >= p.plannedRevenue ? "Closed" : "Inactive"}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-right">

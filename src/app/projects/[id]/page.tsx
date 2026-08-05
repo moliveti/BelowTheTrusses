@@ -48,7 +48,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           {project.active ? (
             <span className="font-mono text-[10px] uppercase text-positive">Active</span>
           ) : (
-            <span className="font-mono text-[10px] uppercase text-ink/40">Inactive</span>
+            <span className="font-mono text-[10px] uppercase text-ink/40">
+              {project.contractValue !== null && project.totalCollected >= project.contractValue ? "Closed" : "Inactive"}
+            </span>
           )}
         </div>
         <p className="text-sm text-ink/70">
@@ -98,6 +100,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <MilestoneSection
         projectId={project.id}
         initialMilestones={project.milestones}
+        initialActive={project.active}
         contractValue={project.contractValue}
         totalCost={project.totalCost}
         hasUnknownRate={project.hasUnknownRate}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { MilestoneRow } from "@/lib/projects/types";
 import { fmtUsd } from "@/lib/dashboard/format";
@@ -10,6 +11,7 @@ const STATUSES = ["Pending", "Invoiced", "Paid", "Overdue"] as const;
 export function MilestoneSection({
   projectId,
   initialMilestones,
+  initialActive,
   contractValue,
   totalCost,
   hasUnknownRate,
@@ -17,12 +19,16 @@ export function MilestoneSection({
 }: {
   projectId: string;
   initialMilestones: MilestoneRow[];
+  initialActive: boolean;
   contractValue: number | null;
   totalCost: number;
   hasUnknownRate: boolean;
   hasHoursLogged: boolean;
 }) {
+  const router = useRouter();
   const [milestones, setMilestones] = useState(initialMilestones);
+  const [active, setActive] = useState(initialActive);
+  const [togglingActive, setTogglingActive] = useState(false);
 
   const totalCollected = useMemo(() => milestones.reduce((s, m) => s + (m.amountPaid ?? 0), 0), [milestones]);
   const pendingBalance = useMemo(
@@ -30,6 +36,19 @@ export function MilestoneSection({
     [milestones]
   );
   const profitability = totalCollected - totalCost;
+  const fullyPaid = contractValue !== null && totalCollected >= contractValue;
+
+  async function toggleActive() {
+    setTogglingActive(true);
+    const supabase = createClient();
+    const next = !active;
+    const { error } = await supabase.from("projects").update({ active: next }).eq("id", projectId);
+    setTogglingActive(false);
+    if (!error) {
+      setActive(next);
+      router.refresh();
+    }
+  }
 
   function patchMilestone(id: string, patch: Partial<MilestoneRow>) {
     setMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -64,6 +83,19 @@ export function MilestoneSection({
 
   return (
     <>
+      <section className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <span className={`font-mono text-[10.5px] uppercase tracking-wide ${active ? "text-positive" : "text-ink/40"}`}>
+          {active ? "Active" : fullyPaid ? "Closed" : "Inactive"}
+        </span>
+        <button
+          onClick={toggleActive}
+          disabled={togglingActive}
+          className="font-mono text-[11px] uppercase text-brand-primary underline underline-offset-2 disabled:opacity-50"
+        >
+          {togglingActive ? "…" : active ? (fullyPaid ? "Mark Project Closed" : "Mark Project Inactive") : "Reopen Project"}
+        </button>
+      </section>
+
       <section className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Stat label="Total Original Proposal" value={contractValue !== null ? fmtUsd(contractValue) : "—"} />
         <Stat label="Total Collected" value={fmtUsd(totalCollected)} />
