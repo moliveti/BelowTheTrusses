@@ -74,9 +74,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm border border-line bg-surface p-8">
         <div className="mb-8 flex flex-col items-center gap-3">
           <Image src="/logo.png" alt="Below the Trusses" width={56} height={56} />
-          <h1 className="text-lg text-ink">
-            Below the <em className="font-normal not-italic text-brand-accent">Trusses</em>
-          </h1>
+          <h1 className="text-lg text-ink">Below the Trusses</h1>
           <p className="text-center text-xs text-ink/60">Forecast &amp; Business Intelligence</p>
         </div>
 

@@ -82,9 +82,7 @@ export function Dashboard({
             <div className="flex items-center gap-4">
               <Image src="/logo.png" alt="Below the Trusses" width={236} height={128} className="h-32 w-auto" />
               <div>
-                <h1 className="text-2xl text-ink">
-                  Below the <em className="font-normal not-italic text-brand-accent">Trusses</em>
-                </h1>
+                <h1 className="text-2xl text-ink">Below the Trusses</h1>
                 <p className="text-xs text-ink/60">{userEmail}</p>
               </div>
             </div>
