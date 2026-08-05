@@ -11,6 +11,7 @@ import {
 import { getProjectsIndex } from "@/lib/projects/queries";
 import { getLeads } from "@/lib/leads/queries";
 import { getMilestoneTemplates } from "@/lib/milestoneTemplates/queries";
+import { getTeamMembers } from "@/lib/admin/queries";
 import { getMyRole } from "@/lib/profile";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 
@@ -25,7 +26,7 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, timeEntries, subcontractors, activeProjects, assignments, projects, rates, leads, milestoneTemplates] =
+  const [data, timeEntries, subcontractors, activeProjects, assignments, projects, rates, leads, milestoneTemplates, team] =
     await Promise.all([
       getDashboardData(),
       getAllTimeEntriesForAdmin(),
@@ -36,6 +37,7 @@ export default async function HomePage() {
       getSubcontractorRates(),
       getLeads(),
       getMilestoneTemplates(),
+      role === "owner" ? getTeamMembers() : Promise.resolve([]),
     ]);
 
   return (
@@ -46,6 +48,8 @@ export default async function HomePage() {
       projects={projects}
       leads={leads}
       milestoneTemplates={milestoneTemplates}
+      role={role}
+      team={team}
     />
   );
 }

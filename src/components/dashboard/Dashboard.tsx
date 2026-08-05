@@ -8,16 +8,19 @@ import type { Assignment, ProjectOption, SubcontractorOption, SubcontractorRates
 import type { ProjectListItem } from "@/lib/projects/types";
 import type { Lead } from "@/lib/leads/types";
 import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
+import type { TeamMember } from "@/lib/admin/types";
+import type { Role } from "@/lib/profile";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
 import { ContractedWorkTab } from "./ContractedWorkTab";
 import { ProductivityTab } from "./ProductivityTab";
 import { LeadsTab } from "./LeadsTab";
+import { TeamTab } from "./TeamTab";
 import { ProjectsIndex } from "@/components/projects/ProjectsIndex";
 import { SignOutButton } from "@/components/SignOutButton";
 
-type Tab = "financial" | "leads" | "referrals" | "contracted" | "productivity" | "projects" | "sow";
+type Tab = "financial" | "leads" | "referrals" | "contracted" | "productivity" | "projects" | "sow" | "team";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "financial", label: "Financial Dashboard" },
@@ -27,6 +30,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "productivity", label: "Productivity" },
   { key: "projects", label: "Projects" },
   { key: "sow", label: "Business Not Materialized" },
+  { key: "team", label: "Team" },
 ];
 
 const TAB_KEYS = TABS.map((t) => t.key);
@@ -46,6 +50,8 @@ export function Dashboard({
   projects,
   leads,
   milestoneTemplates,
+  role,
+  team,
 }: {
   data: DashboardData;
   userEmail: string | undefined;
@@ -53,6 +59,8 @@ export function Dashboard({
   projects: ProjectListItem[];
   leads: Lead[];
   milestoneTemplates: MilestoneTemplateGroup[];
+  role: Role | null;
+  team: TeamMember[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -93,7 +101,7 @@ export function Dashboard({
           </header>
 
           <nav className="flex flex-wrap gap-1">
-            {TABS.map((t) => (
+            {TABS.filter((t) => t.key !== "team" || role === "owner").map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
@@ -148,6 +156,7 @@ export function Dashboard({
         )}
         {tab === "projects" && <ProjectsIndex projects={projects} />}
         {tab === "sow" && <SowTab rows={data.sow} />}
+        {tab === "team" && role === "owner" && <TeamTab team={team} />}
       </main>
     </>
   );
