@@ -95,28 +95,20 @@ export async function getActiveRecommendations(inputs: IntelligenceInputs): Prom
   );
   const seenKeys = new Set<string>();
 
+  // A production run can easily produce dozens of signals (this business has
+  // real backlog). Doing one sequential round-trip per signal was slow
+  // enough to risk a serverless function timeout — everything below runs
+  // concurrently instead, since each signal's write targets a distinct row.
+  const newSignals: Signal[] = [];
+  const updates: { id: string; patch: Record<string, unknown>; resurfaced: boolean; reason: string }[] = [];
+
   for (const signal of signals) {
     const key = `${signal.type}::${signal.sourceTable}::${signal.sourceId}`;
     seenKeys.add(key);
     const existing = existingByKey.get(key);
 
     if (!existing) {
-      const { error } = await supabase.from("recommendations").insert({
-        type: signal.type,
-        source_table: signal.sourceTable,
-        source_id: signal.sourceId,
-        title: signal.title,
-        reason: signal.reason,
-        severity: signal.severity,
-        condition_fingerprint: signal.conditionFingerprint,
-        metric_value: signal.metricValue,
-        metric_label: signal.metricLabel,
-        context: signal.context,
-        status: "active",
-        generated_at: now.toISOString(),
-        last_seen_at: now.toISOString(),
-      });
-      if (error) throw new Error(`recommendations insert: ${error.message}`);
+      newSignals.push(signal);
       continue;
     }
 
@@ -157,32 +149,61 @@ export async function getActiveRecommendations(inputs: IntelligenceInputs): Prom
       });
     }
 
-    const { error } = await supabase.from("recommendations").update(patch).eq("id", existing.id);
-    if (error) throw new Error(`recommendations update: ${error.message}`);
-
-    if (decision.restarted) {
-      await supabase.from("activity_events").insert({
-        entity_table: "recommendations",
-        entity_id: existing.id,
-        event_type: "recommendation_resurfaced",
-        summary: `Recommendation resurfaced: ${decision.reason}`,
-        source: "system",
-        recommendation_id: existing.id,
-      });
-    }
+    updates.push({ id: existing.id, patch, resurfaced: decision.restarted, reason: decision.reason });
   }
+
+  if (newSignals.length > 0) {
+    const { error } = await supabase.from("recommendations").insert(
+      newSignals.map((signal) => ({
+        type: signal.type,
+        source_table: signal.sourceTable,
+        source_id: signal.sourceId,
+        title: signal.title,
+        reason: signal.reason,
+        severity: signal.severity,
+        condition_fingerprint: signal.conditionFingerprint,
+        metric_value: signal.metricValue,
+        metric_label: signal.metricLabel,
+        context: signal.context,
+        status: "active",
+        generated_at: now.toISOString(),
+        last_seen_at: now.toISOString(),
+      }))
+    );
+    if (error) throw new Error(`recommendations insert: ${error.message}`);
+  }
+
+  await Promise.all(
+    updates.map(async (u) => {
+      const { error } = await supabase.from("recommendations").update(u.patch).eq("id", u.id);
+      if (error) throw new Error(`recommendations update: ${error.message}`);
+      if (u.resurfaced) {
+        await supabase.from("activity_events").insert({
+          entity_table: "recommendations",
+          entity_id: u.id,
+          event_type: "recommendation_resurfaced",
+          summary: `Recommendation resurfaced: ${u.reason}`,
+          source: "system",
+          recommendation_id: u.id,
+        });
+      }
+    })
+  );
 
   // Reconcile: rows not reconfirmed this run whose condition no longer holds.
-  for (const [key, row] of existingByKey) {
-    if (seenKeys.has(key)) continue;
-    const nextStatus = reconcileMissing(row.status);
-    if (nextStatus === row.status) continue;
-    const { error } = await supabase
-      .from("recommendations")
-      .update({ status: nextStatus, resolved_at: now.toISOString() })
-      .eq("id", row.id);
-    if (error) throw new Error(`recommendations resolve: ${error.message}`);
-  }
+  const toResolve = Array.from(existingByKey.entries()).filter(([key, row]) => {
+    if (seenKeys.has(key)) return false;
+    return reconcileMissing(row.status) !== row.status;
+  });
+  await Promise.all(
+    toResolve.map(async ([, row]) => {
+      const { error } = await supabase
+        .from("recommendations")
+        .update({ status: reconcileMissing(row.status), resolved_at: now.toISOString() })
+        .eq("id", row.id);
+      if (error) throw new Error(`recommendations resolve: ${error.message}`);
+    })
+  );
 
   const { data, error } = await supabase
     .from("recommendations")
