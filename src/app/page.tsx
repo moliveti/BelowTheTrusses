@@ -12,6 +12,7 @@ import { getProjectsIndex } from "@/lib/projects/queries";
 import { getLeads } from "@/lib/leads/queries";
 import { getMilestoneTemplates } from "@/lib/milestoneTemplates/queries";
 import { getTeamMembers } from "@/lib/admin/queries";
+import { getActiveRecommendations } from "@/lib/intelligence/queries";
 import { getMyRole } from "@/lib/profile";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 
@@ -40,6 +41,10 @@ export default async function HomePage() {
       role === "owner" ? getTeamMembers() : Promise.resolve([]),
     ]);
 
+  // Reuses the leads/dashboard/projects data already fetched above rather
+  // than re-querying them inside the intelligence layer.
+  const recommendations = await getActiveRecommendations({ leads, dashboardData: data, projects });
+
   return (
     <Dashboard
       data={data}
@@ -50,6 +55,7 @@ export default async function HomePage() {
       milestoneTemplates={milestoneTemplates}
       role={role}
       team={team}
+      recommendations={recommendations}
     />
   );
 }

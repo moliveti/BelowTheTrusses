@@ -113,7 +113,7 @@ export function overdueMilestoneSignals(milestones: MilestoneForIntelligence[], 
       conditionFingerprint: buildFingerprint("milestone_overdue", [bucket]),
       metricValue: days,
       metricLabel: "days_overdue",
-      context: { projectName: m.projectName, milestoneName: m.name, outstanding },
+      context: { projectId: m.projectId, projectName: m.projectName, milestoneName: m.name, outstanding },
     });
   }
   return signals;
@@ -142,7 +142,7 @@ export function upcomingMilestoneSignals(milestones: MilestoneForIntelligence[],
       conditionFingerprint: buildFingerprint("milestone_upcoming", [bucket]),
       metricValue: daysUntil,
       metricLabel: "days_until_due",
-      context: { projectName: m.projectName, milestoneName: m.name, outstanding },
+      context: { projectId: m.projectId, projectName: m.projectName, milestoneName: m.name, outstanding },
     });
   }
   return signals;

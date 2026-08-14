@@ -10,6 +10,7 @@ import type { Lead } from "@/lib/leads/types";
 import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import type { TeamMember } from "@/lib/admin/types";
 import type { Role } from "@/lib/profile";
+import type { RecommendationRow } from "@/lib/intelligence/queries";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
@@ -17,12 +18,19 @@ import { ContractedWorkTab } from "./ContractedWorkTab";
 import { ProductivityTab } from "./ProductivityTab";
 import { LeadsTab } from "./LeadsTab";
 import { TeamTab } from "./TeamTab";
+import { TodayTab } from "./TodayTab";
 import { ProjectsIndex } from "@/components/projects/ProjectsIndex";
 import { SignOutButton } from "@/components/SignOutButton";
 
-type Tab = "financial" | "leads" | "referrals" | "contracted" | "productivity" | "projects" | "sow" | "team";
+type Tab = "today" | "financial" | "leads" | "referrals" | "contracted" | "productivity" | "projects" | "sow" | "team";
 
+// "today" is first per the product distinction: Financial Dashboard answers
+// "how are we doing?", Today answers "what should we do?" — but the default
+// landing tab below is deliberately left as "financial" for now (a smaller,
+// more conservative change) rather than switching everyone's first-open
+// experience in the same pass that introduces Today.
 const TABS: { key: Tab; label: string }[] = [
+  { key: "today", label: "Today" },
   { key: "financial", label: "Financial Dashboard" },
   { key: "leads", label: "Leads" },
   { key: "referrals", label: "Referral Sources" },
@@ -52,6 +60,7 @@ export function Dashboard({
   milestoneTemplates,
   role,
   team,
+  recommendations,
 }: {
   data: DashboardData;
   userEmail: string | undefined;
@@ -61,6 +70,7 @@ export function Dashboard({
   milestoneTemplates: MilestoneTemplateGroup[];
   role: Role | null;
   team: TeamMember[];
+  recommendations: RecommendationRow[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -119,6 +129,7 @@ export function Dashboard({
       </div>
 
       <main className="mx-auto max-w-6xl px-6 py-10 md:px-10">
+        {tab === "today" && <TodayTab recommendations={recommendations} />}
         {tab === "financial" && (
           <FinancialDashboardTab
             rows={rows}
