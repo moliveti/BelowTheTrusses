@@ -1,5 +1,30 @@
 import { createClient } from "@/lib/supabase/server";
 import type { ProjectDetail, ProjectListItem } from "./types";
+import type { MilestoneForIntelligence } from "@/lib/intelligence/facts";
+
+/** All milestones on active projects, for cross-project intelligence (overdue/upcoming signals) — getProjectDetail only fetches one project's milestones at a time. */
+export async function getAllMilestonesForIntelligence(): Promise<MilestoneForIntelligence[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("milestones")
+    .select("id, project_id, name, due_date, amount_due, amount_paid, projects!inner(name, active)")
+    .eq("projects.active", true)
+    .order("due_date");
+  if (error) throw new Error(`milestones (intelligence): ${error.message}`);
+
+  return (data ?? []).map((m) => {
+    const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
+    return {
+      id: m.id,
+      projectId: m.project_id,
+      projectName: project?.name ?? "Unknown project",
+      name: m.name,
+      dueDate: m.due_date,
+      amountDue: m.amount_due,
+      amountPaid: m.amount_paid,
+    };
+  });
+}
 
 export async function getProjectsIndex(): Promise<ProjectListItem[]> {
   const supabase = await createClient();

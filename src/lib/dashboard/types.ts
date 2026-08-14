@@ -17,6 +17,7 @@ export interface ReferralSource {
 }
 
 export interface SowRow {
+  id: string;
   dateSent: string | null;
   prospectName: string;
   proposedFee: number | null;

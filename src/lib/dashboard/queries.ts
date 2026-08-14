@@ -39,7 +39,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     supabase.from("referral_sources").select("id, name, type"),
     supabase
       .from("sow_sent")
-      .select("date_sent, prospect_name, proposed_fee, status, notes")
+      .select("id, date_sent, prospect_name, proposed_fee, status, notes")
       .order("date_sent", { ascending: true, nullsFirst: false }),
   ]);
 
@@ -73,6 +73,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     forecast,
     referralSources: referralSourcesRes.data ?? [],
     sow: (sowRes.data ?? []).map((s) => ({
+      id: s.id,
       dateSent: s.date_sent,
       prospectName: s.prospect_name,
       proposedFee: s.proposed_fee,

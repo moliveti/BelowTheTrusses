@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "vitest run",
     "import:excel": "tsx scripts/import-excel.ts",
     "setup:users": "tsx scripts/setup-users.ts",
     "export:audit": "tsx scripts/export-data-audit.ts",
@@ -32,6 +33,7 @@
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "tsx": "^4.19.1",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.10"
   }
 }
