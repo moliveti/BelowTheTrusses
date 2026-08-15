@@ -18,7 +18,7 @@ export function ReferralsTab({
   onModeChange: (mode: RevenueMode) => void;
 }) {
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
         <h2 className="text-lg font-normal">Referral Sources</h2>
         <ModeToggle mode={mode} onChange={onModeChange} />
@@ -27,11 +27,13 @@ export function ReferralsTab({
         Lifetime totals by referrer — click a row to see its year-over-year breakdown.
         {mode === "revenue_forecast" && " The lighter segment is still-outstanding forecast, not yet collected."}
       </p>
-      <ReferralList
-        collectedRows={collectedRows}
-        forecastRows={mode === "revenue_forecast" ? forecastRows : []}
-        referralSources={referralSources}
-      />
+      <div className="max-w-3xl">
+        <ReferralList
+          collectedRows={collectedRows}
+          forecastRows={mode === "revenue_forecast" ? forecastRows : []}
+          referralSources={referralSources}
+        />
+      </div>
     </div>
   );
 }

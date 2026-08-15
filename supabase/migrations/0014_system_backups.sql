@@ -58,3 +58,22 @@ create policy "system_backups_owner" on system_backups
   for all to authenticated
   using (is_owner())
   with check (is_owner());
+
+-- ---------------------------------------------------------------------------
+-- Storage access — the "system-backups" bucket itself was already created
+-- via the Storage API (private, zip-only, id "system-backups"); these are
+-- the RLS policies on storage.objects restricting it. Defense-in-depth: the
+-- actual generation/upload runs via the service-role key (bypasses RLS by
+-- design), and downloads only ever happen through a server route that
+-- issues short-lived signed URLs after its own owner check — but an
+-- authenticated non-owner session should never be able to list or read
+-- this bucket directly either.
+-- ---------------------------------------------------------------------------
+
+create policy "system_backups_bucket_owner_select" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'system-backups' and is_owner());
+
+create policy "system_backups_bucket_owner_insert" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'system-backups' and is_owner());
