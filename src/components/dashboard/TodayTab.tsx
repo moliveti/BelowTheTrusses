@@ -8,12 +8,21 @@ import type { RecommendationRow } from "@/lib/intelligence/queries";
 import type { Signal } from "@/lib/intelligence/types";
 import { topPriorities } from "@/lib/intelligence/rank";
 import { toIsoDate } from "@/lib/hours/dates";
+import type { SowRow } from "@/lib/dashboard/types";
+import type { ProjectListItem } from "@/lib/projects/types";
+import type { Assignment, ProjectOption, SubcontractorOption } from "@/lib/hours/types";
+import { fmtUsd } from "@/lib/dashboard/format";
 
 export interface MonthStats {
   yoyDeltaPct: number | null;
   topReferralName: string | null;
   topReferralSharePct: number | null;
 }
+
+// Mirrors AGING_SOW_STATUSES in lib/intelligence/facts.ts — duplicated
+// rather than imported so this client component doesn't pull in that
+// module's server-only (node:crypto) fingerprinting dependency.
+const OPEN_SOW_STATUSES = ["Open", "On Hold", "No Response"];
 
 type SubPeriod = "today" | "week" | "month";
 type Urgency = "red" | "yellow" | "green";
@@ -113,10 +122,20 @@ export function TodayTab({
   recommendations: initial,
   weeklyExtras,
   monthStats,
+  projects,
+  sowRows,
+  assignments,
+  assignmentProjects,
+  assignmentSubcontractors,
 }: {
   recommendations: RecommendationRow[];
   weeklyExtras: Signal[];
   monthStats: MonthStats;
+  projects: ProjectListItem[];
+  sowRows: SowRow[];
+  assignments: Assignment[];
+  assignmentProjects: ProjectOption[];
+  assignmentSubcontractors: SubcontractorOption[];
 }) {
   const [period, setPeriod] = useState<SubPeriod>("today");
   const [recommendations, setRecommendations] = useState(initial);
@@ -155,6 +174,17 @@ export function TodayTab({
 
       {period === "today" && (
         <>
+          <KpiStrip
+            recommendations={recommendations}
+            projects={projects}
+            sowRows={sowRows}
+            assignments={assignments}
+            assignmentProjects={assignmentProjects}
+            assignmentSubcontractors={assignmentSubcontractors}
+            onHandled={remove}
+            router={router}
+          />
+
           <ColorKey />
 
           <section className="mb-8">
@@ -190,7 +220,227 @@ export function TodayTab({
       {period === "week" && (
         <WeekView recommendations={recommendations} weeklyExtras={weeklyExtras} onHandled={remove} router={router} />
       )}
-      {period === "month" && <MonthView recommendations={recommendations} weeklyExtras={weeklyExtras} stats={monthStats} />}
+      {period === "month" && (
+        <MonthView recommendations={recommendations} weeklyExtras={weeklyExtras} stats={monthStats} onHandled={remove} router={router} />
+      )}
+    </div>
+  );
+}
+
+type KpiKey = "projects" | "quotes" | "overdue" | "dueThisWeek" | "hours";
+
+function KpiTile({
+  active,
+  onClick,
+  label,
+  value,
+  sub,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`border border-line border-t-2 bg-surface p-4 text-left transition ${
+        active ? "border-t-brand-primary bg-canvas" : "border-t-brand-accent hover:bg-canvas"
+      }`}
+    >
+      <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{label}</div>
+      <div className="font-mono text-lg tabular-nums text-ink">{value}</div>
+      {sub && <div className="mt-0.5 text-[11px] text-ink/50">{sub}</div>}
+    </button>
+  );
+}
+
+function KpiStrip({
+  recommendations,
+  projects,
+  sowRows,
+  assignments,
+  assignmentProjects,
+  assignmentSubcontractors,
+  onHandled,
+  router,
+}: {
+  recommendations: RecommendationRow[];
+  projects: ProjectListItem[];
+  sowRows: SowRow[];
+  assignments: Assignment[];
+  assignmentProjects: ProjectOption[];
+  assignmentSubcontractors: SubcontractorOption[];
+  onHandled: (id: string) => void;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const [expanded, setExpanded] = useState<KpiKey | null>(null);
+
+  const activeProjects = useMemo(() => projects.filter((p) => p.active), [projects]);
+
+  const openQuotes = useMemo(() => sowRows.filter((r) => OPEN_SOW_STATUSES.includes(r.status)), [sowRows]);
+  const quotesSentThisWeek = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 7);
+    return openQuotes.filter((r) => r.dateSent !== null && new Date(r.dateSent) >= cutoff);
+  }, [openQuotes]);
+
+  const overdue = useMemo(() => recommendations.filter((r) => r.type === "milestone_overdue"), [recommendations]);
+  const overdueTotal = useMemo(
+    () => overdue.reduce((sum, r) => sum + (typeof r.context.outstanding === "number" ? r.context.outstanding : r.metricValue ?? 0), 0),
+    [overdue]
+  );
+
+  const dueThisWeek = useMemo(() => recommendations.filter((r) => r.type === "milestone_due_this_week"), [recommendations]);
+  const dueThisWeekTotal = useMemo(
+    () => dueThisWeek.reduce((sum, r) => sum + (typeof r.context.outstanding === "number" ? r.context.outstanding : r.metricValue ?? 0), 0),
+    [dueThisWeek]
+  );
+
+  const activeProjectIds = useMemo(() => new Set(activeProjects.map((p) => p.id)), [activeProjects]);
+  const committedAssignments = useMemo(
+    () => assignments.filter((a) => activeProjectIds.has(a.projectId) && (a.allocatedHours ?? 0) > 0),
+    [assignments, activeProjectIds]
+  );
+  const committedHoursTotal = useMemo(
+    () => committedAssignments.reduce((sum, a) => sum + (a.allocatedHours ?? 0), 0),
+    [committedAssignments]
+  );
+  const projectNameById = useMemo(() => new Map(assignmentProjects.map((p) => [p.id, p.name])), [assignmentProjects]);
+  const subcontractorNameById = useMemo(
+    () => new Map(assignmentSubcontractors.map((s) => [s.id, s.name])),
+    [assignmentSubcontractors]
+  );
+
+  function toggle(key: KpiKey) {
+    setExpanded((prev) => (prev === key ? null : key));
+  }
+
+  return (
+    <div className="mb-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <KpiTile
+          active={expanded === "projects"}
+          onClick={() => toggle("projects")}
+          label="Active Projects"
+          value={String(activeProjects.length)}
+        />
+        <KpiTile
+          active={expanded === "quotes"}
+          onClick={() => toggle("quotes")}
+          label="Outstanding Quotes"
+          value={String(openQuotes.length)}
+          sub={`${quotesSentThisWeek.length} sent this week`}
+        />
+        <KpiTile
+          active={expanded === "overdue"}
+          onClick={() => toggle("overdue")}
+          label="Overdue Balances"
+          value={String(overdue.length)}
+          sub={fmtUsd(overdueTotal)}
+        />
+        <KpiTile
+          active={expanded === "dueThisWeek"}
+          onClick={() => toggle("dueThisWeek")}
+          label="Payments Due This Week"
+          value={String(dueThisWeek.length)}
+          sub={fmtUsd(dueThisWeekTotal)}
+        />
+        <KpiTile
+          active={expanded === "hours"}
+          onClick={() => toggle("hours")}
+          label="Hours Committed"
+          value={committedHoursTotal.toFixed(0)}
+          sub={`${committedAssignments.length} assignment${committedAssignments.length === 1 ? "" : "s"}`}
+        />
+      </div>
+
+      {expanded && (
+        <div className="mt-3 border border-line bg-surface p-4">
+          {expanded === "projects" &&
+            (activeProjects.length === 0 ? (
+              <p className="text-sm text-ink/50">No active projects.</p>
+            ) : (
+              <ul className="space-y-1.5 text-sm">
+                {activeProjects.map((p) => (
+                  <li key={p.id}>
+                    <Link href={`/projects/${p.id}`} className="text-brand-primary underline underline-offset-2">
+                      {p.name}
+                    </Link>
+                    <span className="text-ink/50"> — {p.clientName} · {p.type}</span>
+                  </li>
+                ))}
+              </ul>
+            ))}
+
+          {expanded === "quotes" &&
+            (openQuotes.length === 0 ? (
+              <p className="text-sm text-ink/50">No open quotes.</p>
+            ) : (
+              <ul className="space-y-1.5 text-sm">
+                {openQuotes.map((r) => {
+                  const sentThisWeek = quotesSentThisWeek.some((q) => q.id === r.id);
+                  return (
+                    <li key={r.id}>
+                      <span>{r.prospectName}</span>
+                      <span className="text-ink/50">
+                        {" "}
+                        — {r.status}
+                        {r.proposedFee !== null ? ` · ${fmtUsd(r.proposedFee)}` : ""}
+                        {r.dateSent ? ` · sent ${r.dateSent}` : ""}
+                      </span>
+                      {sentThisWeek && (
+                        <span className="ml-1.5 font-mono text-[9.5px] uppercase tracking-wide text-brand-accent">
+                          This Week
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ))}
+
+          {expanded === "overdue" &&
+            (overdue.length === 0 ? (
+              <p className="text-sm text-ink/50">No overdue balances.</p>
+            ) : (
+              <div className="space-y-2">
+                {overdue.map((rec) => (
+                  <RecommendationCard key={rec.id} rec={rec} onHandled={onHandled} router={router} compact />
+                ))}
+              </div>
+            ))}
+
+          {expanded === "dueThisWeek" &&
+            (dueThisWeek.length === 0 ? (
+              <p className="text-sm text-ink/50">Nothing due this week.</p>
+            ) : (
+              <div className="space-y-2">
+                {dueThisWeek.map((rec) => (
+                  <RecommendationCard key={rec.id} rec={rec} onHandled={onHandled} router={router} compact />
+                ))}
+              </div>
+            ))}
+
+          {expanded === "hours" &&
+            (committedAssignments.length === 0 ? (
+              <p className="text-sm text-ink/50">No allocated hours on active projects.</p>
+            ) : (
+              <ul className="space-y-1.5 text-sm">
+                {committedAssignments.map((a) => (
+                  <li key={`${a.projectId}-${a.subcontractorId}`}>
+                    <span>{subcontractorNameById.get(a.subcontractorId) ?? "Unknown"}</span>
+                    <span className="text-ink/50">
+                      {" "}
+                      — {projectNameById.get(a.projectId) ?? "Unknown project"} · {(a.allocatedHours ?? 0).toFixed(0)}h allocated
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -420,7 +670,10 @@ function RecommendationCard({
 }
 
 const PIPELINE_TYPES = new Set(["stale_lead", "aging_sow"]);
-const RISK_TYPES = new Set(["milestone_overdue", "milestone_due_this_week", "milestone_due_this_month"]);
+// Deliberately excludes milestone_due_this_month — those belong to the
+// Month view, not Week. Mixing them in here read as "This Week" cards
+// labeled "This Month," which is what prompted this split.
+const WEEK_RISK_TYPES = new Set(["milestone_overdue", "milestone_due_this_week"]);
 const OPS_TYPES = new Set(["contractor_hours_pending"]);
 
 /** Read-only view of a company-level Signal (never persisted, so no dismiss/snooze/handle — see getWeeklyExtras). */
@@ -454,7 +707,7 @@ function WeekView({
   router: ReturnType<typeof useRouter>;
 }) {
   const pipeline = recommendations.filter((r) => PIPELINE_TYPES.has(r.type));
-  const risk = recommendations.filter((r) => RISK_TYPES.has(r.type));
+  const risk = recommendations.filter((r) => WEEK_RISK_TYPES.has(r.type));
   const ops = recommendations.filter((r) => OPS_TYPES.has(r.type));
   const total = pipeline.length + risk.length + ops.length + weeklyExtras.length;
 
@@ -518,10 +771,14 @@ function MonthView({
   recommendations,
   weeklyExtras,
   stats,
+  onHandled,
+  router,
 }: {
   recommendations: RecommendationRow[];
   weeklyExtras: Signal[];
   stats: MonthStats;
+  onHandled: (id: string) => void;
+  router: ReturnType<typeof useRouter>;
 }) {
   const bySeverity = useMemo(() => {
     const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
@@ -531,6 +788,7 @@ function MonthView({
 
   const closeoutEligible = recommendations.filter((r) => r.type === "aging_sow" && r.context.closeoutSuggested === true).length;
   const forecastConcentration = weeklyExtras.find((s) => s.type === "forecast_concentration");
+  const dueThisMonth = recommendations.filter((r) => r.type === "milestone_due_this_month");
 
   return (
     <div>
@@ -551,6 +809,19 @@ function MonthView({
         <MonthStat label="Open Priorities" value={String(recommendations.length)} sub={`${bySeverity.critical} critical`} />
         <MonthStat label="Quotes Ready to Close Out" value={String(closeoutEligible)} sub="120+ days, no response" />
       </div>
+
+      {dueThisMonth.length > 0 && (
+        <section className="mb-8">
+          <h4 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">
+            Due Later This Month ({dueThisMonth.length})
+          </h4>
+          <div className="space-y-2">
+            {dueThisMonth.map((rec) => (
+              <RecommendationCard key={rec.id} rec={rec} onHandled={onHandled} router={router} compact />
+            ))}
+          </div>
+        </section>
+      )}
 
       {forecastConcentration && (
         <section className="mb-8">

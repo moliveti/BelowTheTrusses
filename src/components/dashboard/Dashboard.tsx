@@ -14,6 +14,7 @@ import type { Signal } from "@/lib/intelligence/types";
 import type { BackupRow, CurrentCycleStatus } from "@/lib/backup/queries";
 import { yearTotal, yoyDeltaPct, referralTotals } from "@/lib/dashboard/aggregate";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
+import { AIAnalyticsTab } from "./AIAnalyticsTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
 import { ContractedWorkTab } from "./ContractedWorkTab";
@@ -90,7 +91,16 @@ export function Dashboard({
   return (
     <AppShell role={role} userEmail={userEmail}>
       {tab === "today" && (
-        <TodayTab recommendations={recommendations} weeklyExtras={weeklyExtras} monthStats={monthStats} />
+        <TodayTab
+          recommendations={recommendations}
+          weeklyExtras={weeklyExtras}
+          monthStats={monthStats}
+          projects={projects}
+          sowRows={data.sow}
+          assignments={contractedWork.assignments}
+          assignmentProjects={contractedWork.activeProjects}
+          assignmentSubcontractors={contractedWork.subcontractors}
+        />
       )}
       {tab === "financial" && (
         <FinancialDashboardTab
@@ -102,6 +112,9 @@ export function Dashboard({
           currentYear={currentYear}
           currentMonth={currentMonth}
         />
+      )}
+      {tab === "ai-analytics" && (
+        <AIAnalyticsTab collectedRows={data.collected} forecastRows={data.forecast} currentYear={currentYear} />
       )}
       {tab === "leads" && (
         <LeadsTab leads={leads} referralSources={data.referralSources} milestoneTemplates={milestoneTemplates} />

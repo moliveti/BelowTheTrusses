@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Role } from "@/lib/profile";
 import {
+  AiIcon,
   ChartIcon,
   ChevronIcon,
   ContractedIcon,
@@ -16,7 +17,17 @@ import {
   type IconProps,
 } from "./dashboard/NavIcons";
 
-export type Tab = "today" | "financial" | "leads" | "referrals" | "contracted" | "productivity" | "projects" | "sow" | "team";
+export type Tab =
+  | "today"
+  | "financial"
+  | "ai-analytics"
+  | "leads"
+  | "referrals"
+  | "contracted"
+  | "productivity"
+  | "projects"
+  | "sow"
+  | "team";
 
 // "Priorities" (nav key "today", unchanged for URL/state stability) sits
 // second per the product distinction: Financial Dashboard answers "how are
@@ -24,6 +35,7 @@ export type Tab = "today" | "financial" | "leads" | "referrals" | "contracted" |
 // the established Financial Dashboard landing experience to stay first.
 export const TABS: { key: Tab; label: string; description: string; Icon: (props: IconProps) => React.JSX.Element }[] = [
   { key: "financial", label: "Financial Dashboard", description: "Revenue, forecast, and business mix", Icon: ChartIcon },
+  { key: "ai-analytics", label: "AI Analytics", description: "What's affecting revenue, and market intel", Icon: AiIcon },
   { key: "today", label: "Priorities", description: "What needs attention today", Icon: PriorityIcon },
   { key: "leads", label: "Leads", description: "Intake and follow-up pipeline", Icon: LeadsIcon },
   { key: "referrals", label: "Referral Sources", description: "Revenue by referral relationship", Icon: ReferralIcon },
