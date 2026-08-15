@@ -3,14 +3,7 @@ import { getAllMilestonesForIntelligence } from "@/lib/projects/queries";
 import type { Lead } from "@/lib/leads/types";
 import type { DashboardData } from "@/lib/dashboard/types";
 import type { ProjectListItem } from "@/lib/projects/types";
-import {
-  agingSowSignals,
-  forecastConcentrationSignal,
-  outstandingBalanceSignals,
-  overdueMilestoneSignals,
-  staleLeadSignals,
-  upcomingMilestoneSignals,
-} from "./facts";
+import { agingSowSignals, milestonesDueThisMonth, milestonesDueThisWeek, overdueMilestoneSignals, staleLeadSignals } from "./facts";
 import { decideLifecycle, reconcileMissing } from "./lifecycle";
 import { rankSignals } from "./rank";
 import type { RecommendationStatus, Severity, Signal } from "./types";
@@ -43,21 +36,21 @@ export interface IntelligenceInputs {
   projects: ProjectListItem[];
 }
 
+// Today shows only what's genuinely actionable today: overdue money,
+// what's due this week, and what's due later this month (so it's on the
+// radar before it becomes urgent). Nothing further out — a bill due in
+// November has no business on a mid-August Today. Company-level
+// observations (outstanding balances with no near-term due date, forecast
+// concentration) are computed elsewhere for This Week/This Month, where
+// "how healthy is the pipeline" is the actual question being asked.
 function computeSignals(inputs: IntelligenceInputs, milestones: Awaited<ReturnType<typeof getAllMilestonesForIntelligence>>, now: Date): Signal[] {
-  const currentYear = now.getFullYear();
-
-  const signals: Signal[] = [
+  return [
     ...staleLeadSignals(inputs.leads, now),
     ...agingSowSignals(inputs.dashboardData.sow, now),
     ...overdueMilestoneSignals(milestones, now),
-    ...upcomingMilestoneSignals(milestones, now),
-    ...outstandingBalanceSignals(inputs.projects),
+    ...milestonesDueThisWeek(milestones, now),
+    ...milestonesDueThisMonth(milestones, now),
   ];
-
-  const forecastSignal = forecastConcentrationSignal(inputs.dashboardData.forecast, currentYear);
-  if (forecastSignal) signals.push(forecastSignal);
-
-  return signals;
 }
 
 interface ExistingRow {

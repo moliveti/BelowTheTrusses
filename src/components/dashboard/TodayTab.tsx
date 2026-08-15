@@ -9,20 +9,56 @@ import { topPriorities } from "@/lib/intelligence/rank";
 import { toIsoDate } from "@/lib/hours/dates";
 
 type SubPeriod = "today" | "week" | "month";
+type Urgency = "red" | "yellow" | "green";
 
-const SEVERITY_STYLE: Record<string, string> = {
-  critical: "border-l-warning",
-  high: "border-l-brand-accent",
-  medium: "border-l-brand-primary",
-  low: "border-l-ink/20",
+/**
+ * Presentation-only urgency, separate from the stored `severity` (which
+ * still drives ranking/lifecycle persistence). Date-driven items map
+ * directly to when they're due; everything else falls back to severity.
+ * One consistent 3-color scale across every recommendation type, per the
+ * owner's request for "a key for colors so we know what they mean."
+ */
+function urgencyOf(rec: RecommendationRow): Urgency {
+  switch (rec.type) {
+    case "milestone_overdue":
+      return "red";
+    case "milestone_due_this_week":
+      return "yellow";
+    case "milestone_due_this_month":
+      return "green";
+    case "contractor_hours_pending":
+      return rec.severity === "high" ? "red" : "yellow";
+    case "aging_sow":
+      return rec.context.closeoutSuggested ? "red" : rec.severity === "high" ? "yellow" : "green";
+    default:
+      return rec.severity === "critical" ? "red" : rec.severity === "high" ? "yellow" : "green";
+  }
+}
+
+const URGENCY_STYLE: Record<Urgency, { border: string; text: string; dot: string }> = {
+  red: { border: "border-l-warning", text: "text-warning", dot: "bg-warning" },
+  yellow: { border: "border-l-brand-accent", text: "text-brand-accent", dot: "bg-brand-accent" },
+  green: { border: "border-l-positive", text: "text-positive", dot: "bg-positive" },
 };
 
-const SEVERITY_LABEL: Record<string, string> = {
-  critical: "text-warning",
-  high: "text-brand-accent",
-  medium: "text-brand-primary",
-  low: "text-ink/50",
-};
+const URGENCY_LABEL: Record<Urgency, string> = { red: "Act Now", yellow: "This Week", green: "This Month" };
+
+function ColorKey() {
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-4 border border-line bg-surface px-3 py-2">
+      <span className="font-mono text-[10px] uppercase tracking-wide text-ink/40">Key</span>
+      {(["red", "yellow", "green"] as Urgency[]).map((u) => (
+        <span key={u} className="flex items-center gap-1.5">
+          <span className={`h-2 w-2 rounded-full ${URGENCY_STYLE[u].dot}`} />
+          <span className="text-xs text-ink/70">
+            {URGENCY_LABEL[u]}
+            {u === "red" ? " — overdue or needs a decision" : u === "yellow" ? " — due within 7 days" : " — due later this month, on your radar"}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function openHref(rec: RecommendationRow): string {
   const projectId = typeof rec.context.projectId === "string" ? rec.context.projectId : null;
@@ -35,6 +71,8 @@ function openHref(rec: RecommendationRow): string {
       return projectId ? `/projects/${projectId}` : "/?tab=projects";
     case "projects":
       return `/projects/${rec.sourceId}`;
+    case "subcontractor_time_entries":
+      return "/?tab=contracted";
     default:
       return "/";
   }
@@ -82,7 +120,7 @@ export function TodayTab({ recommendations: initial }: { recommendations: Recomm
   return (
     <div>
       <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
-        <h2 className="text-lg font-normal">Today</h2>
+        <h2 className="text-lg font-normal">Priorities</h2>
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">What Should We Do?</span>
       </div>
 
@@ -102,6 +140,8 @@ export function TodayTab({ recommendations: initial }: { recommendations: Recomm
 
       {period === "today" && (
         <>
+          <ColorKey />
+
           <section className="mb-8">
             <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Top Priorities Today</h3>
             {top.length === 0 ? (
@@ -152,6 +192,7 @@ function RecommendationCard({
   const [snoozing, setSnoozing] = useState(false);
   const [snoozeDate, setSnoozeDate] = useState("");
   const [busy, setBusy] = useState(false);
+  const urgency = urgencyOf(rec);
 
   async function dismiss() {
     setBusy(true);
@@ -274,13 +315,36 @@ function RecommendationCard({
     router.refresh();
   }
 
+  async function suggestDecline() {
+    setBusy(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("sow_sent").update({ status: "Declined" }).eq("id", rec.sourceId);
+    if (error) {
+      setBusy(false);
+      return;
+    }
+    await logActivity(supabase, {
+      entityTable: "sow_sent",
+      entityId: rec.sourceId,
+      eventType: "sow_declined",
+      summary: "Closed out as Declined from Today (no response, unlikely to convert)",
+      newValue: { status: "Declined" },
+      recommendationId: rec.id,
+    });
+    await markHandled("declined");
+    router.refresh();
+  }
+
+  const isMilestone = rec.type === "milestone_overdue" || rec.type === "milestone_due_this_week" || rec.type === "milestone_due_this_month";
+  const closeoutSuggested = rec.type === "aging_sow" && rec.context.closeoutSuggested === true;
+
   return (
-    <div className={`border border-line border-l-4 bg-surface p-3 ${SEVERITY_STYLE[rec.severity]}`}>
+    <div className={`border border-line border-l-4 bg-surface p-3 ${URGENCY_STYLE[urgency].border}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
-            <span className={`font-mono text-[10px] uppercase tracking-wide ${SEVERITY_LABEL[rec.severity]}`}>
-              {rec.severity}
+            <span className={`font-mono text-[10px] uppercase tracking-wide ${URGENCY_STYLE[urgency].text}`}>
+              {URGENCY_LABEL[urgency]}
             </span>
             <span className={compact ? "text-sm" : "text-[15px]"}>{rec.title}</span>
           </div>
@@ -313,9 +377,14 @@ function RecommendationCard({
               Mark Contacted
             </button>
           )}
-          {(rec.type === "milestone_overdue" || rec.type === "milestone_upcoming") && (
+          {isMilestone && (
             <button onClick={markMilestonePaid} disabled={busy} className="font-mono text-[10px] uppercase text-positive underline underline-offset-2 disabled:opacity-50">
               Mark Paid
+            </button>
+          )}
+          {closeoutSuggested && (
+            <button onClick={suggestDecline} disabled={busy} className="font-mono text-[10px] uppercase text-warning underline underline-offset-2 disabled:opacity-50">
+              Close Out (Decline)
             </button>
           )}
           <button onClick={() => markHandled("acknowledged")} disabled={busy} className="font-mono text-[10px] uppercase text-ink/60 underline underline-offset-2 disabled:opacity-50">

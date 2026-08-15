@@ -21,24 +21,36 @@ import { TeamTab } from "./TeamTab";
 import { TodayTab } from "./TodayTab";
 import { ProjectsIndex } from "@/components/projects/ProjectsIndex";
 import { SignOutButton } from "@/components/SignOutButton";
+import {
+  ChartIcon,
+  ChevronIcon,
+  ContractedIcon,
+  LeadsIcon,
+  PriorityIcon,
+  ProductivityIcon,
+  ProjectsIcon,
+  ReferralIcon,
+  SowIcon,
+  TeamIcon,
+  type IconProps,
+} from "./NavIcons";
 
 type Tab = "today" | "financial" | "leads" | "referrals" | "contracted" | "productivity" | "projects" | "sow" | "team";
 
-// "today" is first per the product distinction: Financial Dashboard answers
-// "how are we doing?", Today answers "what should we do?" — but the default
-// landing tab below is deliberately left as "financial" for now (a smaller,
-// more conservative change) rather than switching everyone's first-open
-// experience in the same pass that introduces Today.
-const TABS: { key: Tab; label: string }[] = [
-  { key: "today", label: "Today" },
-  { key: "financial", label: "Financial Dashboard" },
-  { key: "leads", label: "Leads" },
-  { key: "referrals", label: "Referral Sources" },
-  { key: "contracted", label: "Contracted Work" },
-  { key: "productivity", label: "Productivity" },
-  { key: "projects", label: "Projects" },
-  { key: "sow", label: "Business Not Materialized" },
-  { key: "team", label: "Team" },
+// "Priorities" (nav key "today", unchanged for URL/state stability) sits
+// second per the product distinction: Financial Dashboard answers "how are
+// we doing?", Priorities answers "what should we do?" — the owner wanted
+// the established Financial Dashboard landing experience to stay first.
+const TABS: { key: Tab; label: string; description: string; Icon: (props: IconProps) => React.JSX.Element }[] = [
+  { key: "financial", label: "Financial Dashboard", description: "Revenue, forecast, and business mix", Icon: ChartIcon },
+  { key: "today", label: "Priorities", description: "What needs attention today", Icon: PriorityIcon },
+  { key: "leads", label: "Leads", description: "Intake and follow-up pipeline", Icon: LeadsIcon },
+  { key: "referrals", label: "Referral Sources", description: "Revenue by referral relationship", Icon: ReferralIcon },
+  { key: "contracted", label: "Contracted Work", description: "Subcontractor hours and cost", Icon: ContractedIcon },
+  { key: "productivity", label: "Productivity", description: "Hours logged by person", Icon: ProductivityIcon },
+  { key: "projects", label: "Projects", description: "All projects and billing status", Icon: ProjectsIcon },
+  { key: "sow", label: "Business Not Materialized", description: "Proposals that didn't convert", Icon: SowIcon },
+  { key: "team", label: "Team", description: "Manage users and access", Icon: TeamIcon },
 ];
 
 const TAB_KEYS = TABS.map((t) => t.key);
@@ -76,6 +88,7 @@ export function Dashboard({
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const tab: Tab = (TAB_KEYS as string[]).includes(tabParam ?? "") ? (tabParam as Tab) : "financial";
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   const [mode, setMode] = useState<RevenueMode>("revenue");
   const rows = useMemo(
@@ -95,79 +108,106 @@ export function Dashboard({
     router.replace(query ? `/?${query}` : "/", { scroll: false });
   }
 
+  const visibleTabs = TABS.filter((t) => t.key !== "team" || role === "owner");
+  const sidebarWidth = sidebarExpanded ? "w-56" : "w-16";
+
   return (
     <>
-      <div className="sticky top-0 z-20 border-b border-line bg-canvas">
-        <div className="mx-auto max-w-6xl px-6 md:px-10">
-          <header className="flex items-center justify-between gap-4 border-b border-line py-5">
-            <div className="flex items-center gap-4">
-              <Image src="/logo.png" alt="Below the Trusses" width={236} height={128} className="h-32 w-auto" />
-              <div>
-                <h1 className="text-2xl text-ink">Below the Trusses</h1>
-                <p className="text-xs text-ink/60">{userEmail}</p>
-              </div>
-            </div>
-            <SignOutButton />
-          </header>
+      <aside
+        className={`fixed left-0 top-0 z-30 flex h-screen ${sidebarWidth} flex-col border-r border-line bg-canvas transition-[width] duration-150`}
+      >
+        <div className="flex items-center justify-center border-b border-line py-4">
+          <Image src="/logo.png" alt="Below the Trusses" width={40} height={40} className="h-10 w-10 shrink-0" />
+        </div>
 
-          <nav className="flex flex-wrap gap-1">
-            {TABS.filter((t) => t.key !== "team" || role === "owner").map((t) => (
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto py-3">
+          {visibleTabs.map((t) => (
+            <div key={t.key} className="group relative px-2">
               <button
-                key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`px-5 py-3 font-mono text-xs uppercase tracking-wide transition ${
-                  tab === t.key
-                    ? "border-b-2 border-brand-accent text-ink"
-                    : "text-ink/50 hover:text-ink"
+                className={`flex w-full items-center gap-3 rounded px-2.5 py-2.5 text-left transition ${
+                  tab === t.key ? "bg-brand-primary text-white" : "text-ink/60 hover:bg-ink/5 hover:text-ink"
                 }`}
               >
-                {t.label}
+                <t.Icon className="h-[18px] w-[18px] shrink-0" />
+                {sidebarExpanded && (
+                  <span className="truncate font-mono text-[11px] uppercase tracking-wide">{t.label}</span>
+                )}
               </button>
-            ))}
-          </nav>
-        </div>
-      </div>
 
-      <main className="mx-auto max-w-6xl px-6 py-10 md:px-10">
-        {tab === "today" && <TodayTab recommendations={recommendations} />}
-        {tab === "financial" && (
-          <FinancialDashboardTab
-            rows={rows}
-            collectedRows={data.collected}
-            forecastRows={data.forecast}
-            mode={mode}
-            onModeChange={setMode}
-            currentYear={currentYear}
-            currentMonth={currentMonth}
-          />
-        )}
-        {tab === "leads" && (
-          <LeadsTab leads={leads} referralSources={data.referralSources} milestoneTemplates={milestoneTemplates} />
-        )}
-        {tab === "referrals" && (
-          <ReferralsTab
-            collectedRows={data.collected}
-            forecastRows={data.forecast}
-            referralSources={data.referralSources}
-            mode={mode}
-            onModeChange={setMode}
-          />
-        )}
-        {tab === "contracted" && (
-          <ContractedWorkTab
-            entries={contractedWork.timeEntries}
-            subcontractors={contractedWork.subcontractors}
-            activeProjects={contractedWork.activeProjects}
-            initialAssignments={contractedWork.assignments}
-            rates={contractedWork.rates}
-          />
-        )}
-        {tab === "productivity" && (
-          <ProductivityTab entries={contractedWork.timeEntries} />
-        )}
-        {tab === "projects" && <ProjectsIndex projects={projects} />}
-        {tab === "sow" && <SowTab rows={data.sow} />}
-        {tab === "team" && role === "owner" && <TeamTab team={team} />}
+              {!sidebarExpanded && (
+                <div className="pointer-events-none absolute left-full top-1/2 z-40 ml-2 -translate-y-1/2 whitespace-nowrap rounded bg-ink px-2.5 py-1.5 text-xs text-white opacity-0 shadow-md transition-opacity duration-100 group-hover:opacity-100">
+                  <div className="font-medium">{t.label}</div>
+                  <div className="text-[10.5px] text-white/70">{t.description}</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </nav>
+
+        <button
+          onClick={() => setSidebarExpanded((v) => !v)}
+          className="flex items-center justify-center gap-2 border-t border-line py-3 text-ink/50 hover:text-ink"
+          title={sidebarExpanded ? "Collapse" : "Expand"}
+        >
+          <ChevronIcon direction={sidebarExpanded ? "left" : "right"} className="h-4 w-4" />
+          {sidebarExpanded && <span className="font-mono text-[10px] uppercase tracking-wide">Collapse</span>}
+        </button>
+
+        <div className="border-t border-line p-2.5">
+          {sidebarExpanded ? (
+            <>
+              {userEmail && <p className="mb-1.5 truncate px-0.5 text-[10.5px] text-ink/50">{userEmail}</p>}
+              <SignOutButton />
+            </>
+          ) : (
+            <SignOutButton iconOnly />
+          )}
+        </div>
+      </aside>
+
+      <main
+        className={`min-h-screen px-6 py-10 transition-[margin] duration-150 md:px-10 ${sidebarExpanded ? "ml-56" : "ml-16"}`}
+      >
+        <div className="mx-auto max-w-6xl">
+          {tab === "today" && <TodayTab recommendations={recommendations} />}
+          {tab === "financial" && (
+            <FinancialDashboardTab
+              rows={rows}
+              collectedRows={data.collected}
+              forecastRows={data.forecast}
+              mode={mode}
+              onModeChange={setMode}
+              currentYear={currentYear}
+              currentMonth={currentMonth}
+            />
+          )}
+          {tab === "leads" && (
+            <LeadsTab leads={leads} referralSources={data.referralSources} milestoneTemplates={milestoneTemplates} />
+          )}
+          {tab === "referrals" && (
+            <ReferralsTab
+              collectedRows={data.collected}
+              forecastRows={data.forecast}
+              referralSources={data.referralSources}
+              mode={mode}
+              onModeChange={setMode}
+            />
+          )}
+          {tab === "contracted" && (
+            <ContractedWorkTab
+              entries={contractedWork.timeEntries}
+              subcontractors={contractedWork.subcontractors}
+              activeProjects={contractedWork.activeProjects}
+              initialAssignments={contractedWork.assignments}
+              rates={contractedWork.rates}
+            />
+          )}
+          {tab === "productivity" && <ProductivityTab entries={contractedWork.timeEntries} />}
+          {tab === "projects" && <ProjectsIndex projects={projects} />}
+          {tab === "sow" && <SowTab rows={data.sow} />}
+          {tab === "team" && role === "owner" && <TeamTab team={team} />}
+        </div>
       </main>
     </>
   );

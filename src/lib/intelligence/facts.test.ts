@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   agingSowSignals,
+  contractorHoursPendingSignal,
   forecastConcentrationSignal,
+  milestonesDueThisMonth,
+  milestonesDueThisWeek,
   outstandingBalanceSignals,
   overdueMilestoneSignals,
   staleLeadSignals,
-  upcomingMilestoneSignals,
   type MilestoneForIntelligence,
+  type PayableTimeEntry,
 } from "./facts";
 import type { Lead } from "@/lib/leads/types";
 import type { SowRow, RevenueRow } from "@/lib/dashboard/types";
@@ -107,10 +110,27 @@ describe("agingSowSignals", () => {
     expect(agingSowSignals([makeSow({ dateSent: null })], ASOF)).toHaveLength(0);
   });
 
-  it("escalates through the 14/30/60 day buckets", () => {
+  it("escalates from medium to high, capping there short of the closeout threshold", () => {
     expect(agingSowSignals([makeSow({ dateSent: "2026-08-01" })], ASOF)[0].severity).toBe("medium"); // 14 days
     expect(agingSowSignals([makeSow({ dateSent: "2026-07-16" })], ASOF)[0].severity).toBe("high"); // 30 days
-    expect(agingSowSignals([makeSow({ dateSent: "2026-06-16" })], ASOF)[0].severity).toBe("critical"); // 60 days
+    expect(agingSowSignals([makeSow({ dateSent: "2026-06-16" })], ASOF)[0].severity).toBe("high"); // 60 days — critical is reserved for closeout-eligible (120+ days)
+  });
+
+  it("suggests closing out a quote past the 120-day threshold instead of asking to follow up again", () => {
+    const fresh = agingSowSignals([makeSow({ dateSent: "2026-07-01" })], ASOF)[0]; // 45 days
+    expect(fresh.context.closeoutSuggested).toBe(false);
+    expect(fresh.reason).toMatch(/Status/);
+
+    const old = agingSowSignals([makeSow({ dateSent: "2026-01-01" })], ASOF)[0]; // 226 days
+    expect(old.context.closeoutSuggested).toBe(true);
+    expect(old.reason).toMatch(/isn't likely to close/);
+    expect(old.severity).toBe("critical");
+  });
+
+  it("does not keep changing the fingerprint day-to-day once past the closeout threshold", () => {
+    const a = agingSowSignals([makeSow({ dateSent: "2026-01-01" })], ASOF)[0]; // 226 days
+    const b = agingSowSignals([makeSow({ dateSent: "2025-12-01" })], ASOF)[0]; // 257 days, still closeout
+    expect(a.conditionFingerprint).toBe(b.conditionFingerprint);
   });
 });
 
@@ -155,26 +175,93 @@ describe("overdueMilestoneSignals", () => {
   });
 });
 
-describe("upcomingMilestoneSignals", () => {
-  it("flags a milestone due in 3 days as high severity", () => {
-    const signals = upcomingMilestoneSignals([makeMilestone({ dueDate: "2026-08-18" })], ASOF);
-    expect(signals).toHaveLength(1);
-    expect(signals[0].metricValue).toBe(3);
-    expect(signals[0].severity).toBe("high");
-  });
-
-  it("does not flag a milestone 20 days out with the default 14-day window", () => {
-    expect(upcomingMilestoneSignals([makeMilestone({ dueDate: "2026-09-04" })], ASOF)).toHaveLength(0);
-  });
-
-  it("does not double-count an overdue milestone as upcoming", () => {
-    expect(upcomingMilestoneSignals([makeMilestone({ dueDate: "2026-08-14" })], ASOF)).toHaveLength(0);
-  });
-
+describe("milestonesDueThisWeek", () => {
   it("includes a milestone due today", () => {
-    const signals = upcomingMilestoneSignals([makeMilestone({ dueDate: "2026-08-15" })], ASOF);
+    const signals = milestonesDueThisWeek([makeMilestone({ dueDate: "2026-08-15" })], ASOF);
     expect(signals).toHaveLength(1);
     expect(signals[0].metricValue).toBe(0);
+    expect(signals[0].type).toBe("milestone_due_this_week");
+  });
+
+  it("includes a milestone due in 7 days", () => {
+    expect(milestonesDueThisWeek([makeMilestone({ dueDate: "2026-08-22" })], ASOF)).toHaveLength(1);
+  });
+
+  it("excludes a milestone due in 8 days — that's this-month, not this-week", () => {
+    expect(milestonesDueThisWeek([makeMilestone({ dueDate: "2026-08-23" })], ASOF)).toHaveLength(0);
+  });
+
+  it("does not double-count an overdue milestone", () => {
+    expect(milestonesDueThisWeek([makeMilestone({ dueDate: "2026-08-14" })], ASOF)).toHaveLength(0);
+  });
+});
+
+describe("milestonesDueThisMonth", () => {
+  it("excludes a milestone due in 7 days — that's this-week, not this-month", () => {
+    expect(milestonesDueThisMonth([makeMilestone({ dueDate: "2026-08-22" })], ASOF)).toHaveLength(0);
+  });
+
+  it("includes a milestone due in 8 days, still within August", () => {
+    const signals = milestonesDueThisMonth([makeMilestone({ dueDate: "2026-08-23" })], ASOF);
+    expect(signals).toHaveLength(1);
+    expect(signals[0].type).toBe("milestone_due_this_month");
+  });
+
+  it("excludes a milestone due next month entirely — no action needed on Today for a November bill in mid-August", () => {
+    expect(milestonesDueThisMonth([makeMilestone({ dueDate: "2026-09-04" })], ASOF)).toHaveLength(0);
+    expect(milestonesDueThisMonth([makeMilestone({ dueDate: "2026-11-15" })], ASOF)).toHaveLength(0);
+  });
+});
+
+function makeTimeEntry(overrides: Partial<PayableTimeEntry>): PayableTimeEntry {
+  return {
+    id: "te-1",
+    subcontractorId: "sub-1",
+    subcontractorName: "Test Sub",
+    workDate: "2026-08-11",
+    hours: 4,
+    hourlyRate: 80,
+    paidAt: null,
+    ...overrides,
+  };
+}
+
+// ASOF = Saturday 2026-08-15 — the current pay cycle's Friday is 2026-08-14 (already passed).
+describe("contractorHoursPendingSignal", () => {
+  it("returns null when everything in the cycle is already paid", () => {
+    const entry = makeTimeEntry({ workDate: "2026-08-11", paidAt: "2026-08-14" });
+    expect(contractorHoursPendingSignal([entry], ASOF)).toBeNull();
+  });
+
+  it("flags unpaid hours from the current cycle as overdue once past that Friday", () => {
+    const entry = makeTimeEntry({ workDate: "2026-08-11", paidAt: null });
+    const signal = contractorHoursPendingSignal([entry], ASOF);
+    expect(signal).not.toBeNull();
+    expect(signal!.title).toMatch(/past due/);
+    expect(signal!.severity).toBe("high");
+  });
+
+  it("ignores entries from before the current pay cycle window", () => {
+    const entry = makeTimeEntry({ workDate: "2026-07-01", paidAt: null });
+    expect(contractorHoursPendingSignal([entry], ASOF)).toBeNull();
+  });
+
+  it("sums unpaid hours/dollars across multiple entries", () => {
+    const entries = [
+      makeTimeEntry({ id: "te-1", workDate: "2026-08-10", hours: 4, hourlyRate: 80 }),
+      makeTimeEntry({ id: "te-2", workDate: "2026-08-12", hours: 3, hourlyRate: 100 }),
+    ];
+    const signal = contractorHoursPendingSignal(entries, ASOF);
+    expect(signal!.metricValue).toBe(4 * 80 + 3 * 100);
+    expect(signal!.context.totalHours).toBe(7);
+  });
+
+  it("is medium (not overdue) when the cycle's Friday hasn't arrived yet", () => {
+    const wednesday = new Date("2026-08-12T12:00:00Z"); // Friday is 2026-08-14, still ahead
+    const entry = makeTimeEntry({ workDate: "2026-08-11", paidAt: null });
+    const signal = contractorHoursPendingSignal([entry], wednesday);
+    expect(signal!.severity).toBe("medium");
+    expect(signal!.title).toMatch(/due by Friday/);
   });
 });
 
