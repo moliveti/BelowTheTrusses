@@ -21,6 +21,11 @@ export function ProjectsIndex({ projects }: { projects: ProjectListItem[] }) {
 
   return (
     <div>
+      <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
+        <h2 className="text-lg font-normal">Projects</h2>
+        <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">All Projects &amp; Billing Status</span>
+      </div>
+
       <input
         type="text"
         placeholder="Search projects or clients…"

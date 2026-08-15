@@ -1,9 +1,9 @@
 import { notFound, redirect } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import { getMyRole } from "@/lib/profile";
 import { getProjectDetail } from "@/lib/projects/queries";
-import { SignOutButton } from "@/components/SignOutButton";
+import { createClient } from "@/lib/supabase/server";
+import { AppShell } from "@/components/AppShell";
 import { MilestoneSection } from "@/components/projects/MilestoneSection";
 import { ScopeSection } from "@/components/projects/ScopeSection";
 import { fmtUsd } from "@/lib/dashboard/format";
@@ -19,28 +19,26 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const project = await getProjectDetail(id);
   if (!project) notFound();
 
-  return (
-    <main className="mx-auto max-w-4xl px-6 py-10 md:px-10">
-      <header className="mb-8 flex items-center justify-between gap-4 border-b border-line pb-6">
-        <div className="flex items-center gap-4">
-          <Image src="/logo.png" alt="Below the Trusses" width={44} height={44} />
-          <div>
-            <h1 className="text-lg text-ink">Below the Trusses</h1>
-            <p className="text-xs text-ink/60">
-              <Link href="/" className="underline underline-offset-2 hover:text-brand-primary">
-                Dashboard
-              </Link>{" "}
-              /{" "}
-              <Link href="/?tab=projects" className="underline underline-offset-2 hover:text-brand-primary">
-                Projects
-              </Link>{" "}
-              / {project.name}
-            </p>
-          </div>
-        </div>
-        <SignOutButton />
-      </header>
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
+  const breadcrumb = (
+    <p className="mt-1.5 text-xs text-ink/60">
+      <Link href="/" className="underline underline-offset-2 hover:text-brand-primary">
+        Dashboard
+      </Link>{" "}
+      /{" "}
+      <Link href="/?tab=projects" className="underline underline-offset-2 hover:text-brand-primary">
+        Projects
+      </Link>{" "}
+      / {project.name}
+    </p>
+  );
+
+  return (
+    <AppShell role={role} userEmail={user?.email} breadcrumb={breadcrumb}>
       <section className="mb-8">
         <div className="mb-2 flex flex-wrap items-baseline gap-3">
           <h2 className="text-xl text-ink">{project.name}</h2>
@@ -149,7 +147,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           </div>
         )}
       </section>
-    </main>
+    </AppShell>
   );
 }
 
