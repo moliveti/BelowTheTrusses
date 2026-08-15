@@ -12,7 +12,7 @@ import { getProjectsIndex } from "@/lib/projects/queries";
 import { getLeads } from "@/lib/leads/queries";
 import { getMilestoneTemplates } from "@/lib/milestoneTemplates/queries";
 import { getTeamMembers } from "@/lib/admin/queries";
-import { getActiveRecommendations } from "@/lib/intelligence/queries";
+import { getActiveRecommendations, getWeeklyExtras } from "@/lib/intelligence/queries";
 import { getBackupHistory, getCurrentCycleStatus, type BackupRow, type CurrentCycleStatus } from "@/lib/backup/queries";
 import { currentBackupCycleDate } from "@/lib/backup/cycle";
 import { getMyRole } from "@/lib/profile";
@@ -63,6 +63,7 @@ export default async function HomePage() {
   // Reuses the leads/dashboard/projects data already fetched above rather
   // than re-querying them inside the intelligence layer.
   const recommendations = await getActiveRecommendations({ leads, dashboardData: data, projects });
+  const weeklyExtras = getWeeklyExtras({ leads, dashboardData: data, projects });
   const { history: backupHistory, cycle: currentBackupCycle } = role === "owner" ? await safeBackupData() : { history: [], cycle: { cycleDate: currentBackupCycleDate(new Date()), validBackup: null, hasActiveRun: false, hasFailedAttempt: false, isOverdue: false } };
 
   return (
@@ -76,6 +77,7 @@ export default async function HomePage() {
       role={role}
       team={team}
       recommendations={recommendations}
+      weeklyExtras={weeklyExtras}
       backupHistory={backupHistory}
       currentBackupCycle={currentBackupCycle}
     />

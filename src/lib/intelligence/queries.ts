@@ -3,7 +3,15 @@ import { getAllMilestonesForIntelligence } from "@/lib/projects/queries";
 import type { Lead } from "@/lib/leads/types";
 import type { DashboardData } from "@/lib/dashboard/types";
 import type { ProjectListItem } from "@/lib/projects/types";
-import { agingSowSignals, milestonesDueThisMonth, milestonesDueThisWeek, overdueMilestoneSignals, staleLeadSignals } from "./facts";
+import {
+  agingSowSignals,
+  forecastConcentrationSignal,
+  milestonesDueThisMonth,
+  milestonesDueThisWeek,
+  outstandingBalanceSignals,
+  overdueMilestoneSignals,
+  staleLeadSignals,
+} from "./facts";
 import { decideLifecycle, reconcileMissing } from "./lifecycle";
 import { rankSignals } from "./rank";
 import type { RecommendationStatus, Severity, Signal } from "./types";
@@ -51,6 +59,22 @@ function computeSignals(inputs: IntelligenceInputs, milestones: Awaited<ReturnTy
     ...milestonesDueThisWeek(milestones, now),
     ...milestonesDueThisMonth(milestones, now),
   ];
+}
+
+/**
+ * Company-level observations that don't belong on the daily Today feed
+ * (no near-term due date to act on) but are exactly the "how healthy is
+ * the pipeline" question This Week/This Month actually ask. Computed
+ * fresh on every call, not persisted to `recommendations` — there's no
+ * per-record dismiss/snooze/handle state that makes sense for "the book
+ * of business is concentrated in November," only for a specific bill or
+ * lead. Read-only in the UI.
+ */
+export function getWeeklyExtras(inputs: IntelligenceInputs, now: Date = new Date()): Signal[] {
+  const signals: Signal[] = [...outstandingBalanceSignals(inputs.projects)];
+  const forecastSignal = forecastConcentrationSignal(inputs.dashboardData.forecast, now.getFullYear());
+  if (forecastSignal) signals.push(forecastSignal);
+  return rankSignals(signals);
 }
 
 interface ExistingRow {

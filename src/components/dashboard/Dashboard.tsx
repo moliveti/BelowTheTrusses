@@ -10,7 +10,9 @@ import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import type { TeamMember } from "@/lib/admin/types";
 import type { Role } from "@/lib/profile";
 import type { RecommendationRow } from "@/lib/intelligence/queries";
+import type { Signal } from "@/lib/intelligence/types";
 import type { BackupRow, CurrentCycleStatus } from "@/lib/backup/queries";
+import { yearTotal, yoyDeltaPct, referralTotals } from "@/lib/dashboard/aggregate";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
@@ -41,6 +43,7 @@ export function Dashboard({
   role,
   team,
   recommendations,
+  weeklyExtras,
   backupHistory,
   currentBackupCycle,
 }: {
@@ -53,6 +56,7 @@ export function Dashboard({
   role: Role | null;
   team: TeamMember[];
   recommendations: RecommendationRow[];
+  weeklyExtras: Signal[];
   backupHistory: BackupRow[];
   currentBackupCycle: CurrentCycleStatus;
 }) {
@@ -70,9 +74,24 @@ export function Dashboard({
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
 
+  const monthStats = useMemo(() => {
+    const combined = [...data.collected, ...data.forecast];
+    const currentTotal = yearTotal(combined, currentYear);
+    const priorTotal = yearTotal(combined, currentYear - 1);
+    const topReferral = referralTotals(combined, data.referralSources)[0] ?? null;
+    const lifetimeTotal = combined.reduce((s, r) => s + r.amount, 0);
+    return {
+      yoyDeltaPct: yoyDeltaPct(currentTotal, priorTotal),
+      topReferralName: topReferral?.name ?? null,
+      topReferralSharePct: topReferral && lifetimeTotal > 0 ? Math.round((topReferral.total / lifetimeTotal) * 100) : null,
+    };
+  }, [data, currentYear]);
+
   return (
     <AppShell role={role} userEmail={userEmail}>
-      {tab === "today" && <TodayTab recommendations={recommendations} />}
+      {tab === "today" && (
+        <TodayTab recommendations={recommendations} weeklyExtras={weeklyExtras} monthStats={monthStats} />
+      )}
       {tab === "financial" && (
         <FinancialDashboardTab
           rows={rows}

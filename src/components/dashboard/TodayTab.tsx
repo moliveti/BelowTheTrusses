@@ -5,8 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { RecommendationRow } from "@/lib/intelligence/queries";
+import type { Signal } from "@/lib/intelligence/types";
 import { topPriorities } from "@/lib/intelligence/rank";
 import { toIsoDate } from "@/lib/hours/dates";
+
+export interface MonthStats {
+  yoyDeltaPct: number | null;
+  topReferralName: string | null;
+  topReferralSharePct: number | null;
+}
 
 type SubPeriod = "today" | "week" | "month";
 type Urgency = "red" | "yellow" | "green";
@@ -18,7 +25,7 @@ type Urgency = "red" | "yellow" | "green";
  * One consistent 3-color scale across every recommendation type, per the
  * owner's request for "a key for colors so we know what they mean."
  */
-function urgencyOf(rec: RecommendationRow): Urgency {
+function urgencyOf(rec: Pick<RecommendationRow, "type" | "severity" | "context">): Urgency {
   switch (rec.type) {
     case "milestone_overdue":
       return "red";
@@ -60,7 +67,7 @@ function ColorKey() {
   );
 }
 
-function openHref(rec: RecommendationRow): string {
+function openHref(rec: Pick<RecommendationRow, "sourceTable" | "sourceId" | "context">): string {
   const projectId = typeof rec.context.projectId === "string" ? rec.context.projectId : null;
   switch (rec.sourceTable) {
     case "leads":
@@ -102,7 +109,15 @@ async function logActivity(
   });
 }
 
-export function TodayTab({ recommendations: initial }: { recommendations: RecommendationRow[] }) {
+export function TodayTab({
+  recommendations: initial,
+  weeklyExtras,
+  monthStats,
+}: {
+  recommendations: RecommendationRow[];
+  weeklyExtras: Signal[];
+  monthStats: MonthStats;
+}) {
   const [period, setPeriod] = useState<SubPeriod>("today");
   const [recommendations, setRecommendations] = useState(initial);
   const router = useRouter();
@@ -172,8 +187,10 @@ export function TodayTab({ recommendations: initial }: { recommendations: Recomm
         </>
       )}
 
-      {period === "week" && <WeekPlaceholder recommendations={recommendations} />}
-      {period === "month" && <MonthPlaceholder recommendations={recommendations} />}
+      {period === "week" && (
+        <WeekView recommendations={recommendations} weeklyExtras={weeklyExtras} onHandled={remove} router={router} />
+      )}
+      {period === "month" && <MonthView recommendations={recommendations} weeklyExtras={weeklyExtras} stats={monthStats} />}
     </div>
   );
 }
@@ -402,55 +419,162 @@ function RecommendationCard({
   );
 }
 
-function WeekPlaceholder({ recommendations }: { recommendations: RecommendationRow[] }) {
-  const byType = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of recommendations) counts.set(r.type, (counts.get(r.type) ?? 0) + 1);
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  }, [recommendations]);
+const PIPELINE_TYPES = new Set(["stale_lead", "aging_sow"]);
+const RISK_TYPES = new Set(["milestone_overdue", "milestone_due_this_week", "milestone_due_this_month"]);
+const OPS_TYPES = new Set(["contractor_hours_pending"]);
+
+/** Read-only view of a company-level Signal (never persisted, so no dismiss/snooze/handle — see getWeeklyExtras). */
+function ObservationCard({ signal }: { signal: Signal }) {
+  const urgency = urgencyOf(signal);
+  return (
+    <div className={`border border-line border-l-4 bg-surface p-3 ${URGENCY_STYLE[urgency].border}`}>
+      <div className="flex items-center gap-2">
+        <span className={`font-mono text-[10px] uppercase tracking-wide ${URGENCY_STYLE[urgency].text}`}>
+          {URGENCY_LABEL[urgency]}
+        </span>
+        <span className="text-[15px]">{signal.title}</span>
+      </div>
+      <p className="mt-1 text-xs text-ink/70">{signal.reason}</p>
+      <Link href={openHref(signal)} className="mt-2 inline-block font-mono text-[10px] uppercase text-brand-primary underline underline-offset-2">
+        Open
+      </Link>
+    </div>
+  );
+}
+
+function WeekView({
+  recommendations,
+  weeklyExtras,
+  onHandled,
+  router,
+}: {
+  recommendations: RecommendationRow[];
+  weeklyExtras: Signal[];
+  onHandled: (id: string) => void;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const pipeline = recommendations.filter((r) => PIPELINE_TYPES.has(r.type));
+  const risk = recommendations.filter((r) => RISK_TYPES.has(r.type));
+  const ops = recommendations.filter((r) => OPS_TYPES.has(r.type));
+  const total = pipeline.length + risk.length + ops.length + weeklyExtras.length;
 
   return (
-    <section>
-      <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Top Moves This Week</h3>
-      <div className="border border-line bg-surface p-4 text-sm text-ink/70">
-        <p className="mb-3">
-          This week's view reuses the same intelligence feed as Today, without the daily 5-item cap — full
-          weekly-specific sections (Revenue &amp; Forecast, Sales Pipeline, Project Risk) are the next layer to
-          build on this same architecture.
-        </p>
-        {byType.length === 0 ? (
-          <p className="text-ink/50">No open items right now.</p>
-        ) : (
-          <ul className="space-y-1 font-mono text-xs">
-            {byType.map(([type, count]) => (
-              <li key={type}>
-                {count} × {type.replace(/_/g, " ")}
-              </li>
+    <div>
+      <h3 className="mb-1 font-mono text-xs uppercase tracking-wide text-ink/60">Top Moves This Week</h3>
+      <p className="mb-6 text-xs text-ink/50">
+        {total} item{total === 1 ? "" : "s"} across revenue, pipeline, and project risk — everything currently open, not
+        just the daily top 5.
+      </p>
+
+      {weeklyExtras.length > 0 && (
+        <section className="mb-8">
+          <h4 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Revenue &amp; Forecast</h4>
+          <div className="space-y-2">
+            {weeklyExtras.map((s) => (
+              <ObservationCard key={s.sourceId + s.type} signal={s} />
             ))}
-          </ul>
-        )}
+          </div>
+        </section>
+      )}
+
+      <WeekSection title="Sales Pipeline" items={pipeline} onHandled={onHandled} router={router} />
+      <WeekSection title="Project Risk" items={risk} onHandled={onHandled} router={router} />
+      <WeekSection title="Operations" items={ops} onHandled={onHandled} router={router} />
+
+      {total === 0 && (
+        <div className="border border-line bg-surface p-4 text-sm text-ink/50">Nothing open this week.</div>
+      )}
+    </div>
+  );
+}
+
+function WeekSection({
+  title,
+  items,
+  onHandled,
+  router,
+}: {
+  title: string;
+  items: RecommendationRow[];
+  onHandled: (id: string) => void;
+  router: ReturnType<typeof useRouter>;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <section className="mb-8">
+      <h4 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">
+        {title} ({items.length})
+      </h4>
+      <div className="space-y-2">
+        {items.map((rec) => (
+          <RecommendationCard key={rec.id} rec={rec} onHandled={onHandled} router={router} compact />
+        ))}
       </div>
     </section>
   );
 }
 
-function MonthPlaceholder({ recommendations }: { recommendations: RecommendationRow[] }) {
-  const total = recommendations.length;
-  const critical = recommendations.filter((r) => r.severity === "critical").length;
+function MonthView({
+  recommendations,
+  weeklyExtras,
+  stats,
+}: {
+  recommendations: RecommendationRow[];
+  weeklyExtras: Signal[];
+  stats: MonthStats;
+}) {
+  const bySeverity = useMemo(() => {
+    const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+    for (const r of recommendations) counts[r.severity] += 1;
+    return counts;
+  }, [recommendations]);
+
+  const closeoutEligible = recommendations.filter((r) => r.type === "aging_sow" && r.context.closeoutSuggested === true).length;
+  const forecastConcentration = weeklyExtras.find((s) => s.type === "forecast_concentration");
 
   return (
-    <section>
-      <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Monthly Review</h3>
-      <div className="border border-line bg-surface p-4 text-sm text-ink/70">
-        <p className="mb-3">
-          Full monthly intelligence (trend analysis, forecast accuracy, referral concentration over time) builds on
-          the same deterministic-facts-first service — this is a placeholder proving the shared architecture, not
-          the finished view.
-        </p>
-        <p className="font-mono text-xs">
-          {total} open recommendation{total === 1 ? "" : "s"}, {critical} critical.
-        </p>
+    <div>
+      <h3 className="mb-1 font-mono text-xs uppercase tracking-wide text-ink/60">Monthly Review</h3>
+      <p className="mb-6 text-xs text-ink/50">Is the business getting healthier, and where should direction change?</p>
+
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <MonthStat
+          label="Revenue vs. Last Year"
+          value={stats.yoyDeltaPct !== null ? `${stats.yoyDeltaPct >= 0 ? "+" : ""}${stats.yoyDeltaPct.toFixed(0)}%` : "—"}
+          accent={stats.yoyDeltaPct !== null && stats.yoyDeltaPct >= 0 ? "positive" : "warning"}
+        />
+        <MonthStat
+          label="Top Referral Concentration"
+          value={stats.topReferralSharePct !== null ? `${stats.topReferralSharePct}%` : "—"}
+          sub={stats.topReferralName ?? undefined}
+        />
+        <MonthStat label="Open Priorities" value={String(recommendations.length)} sub={`${bySeverity.critical} critical`} />
+        <MonthStat label="Quotes Ready to Close Out" value={String(closeoutEligible)} sub="120+ days, no response" />
       </div>
-    </section>
+
+      {forecastConcentration && (
+        <section className="mb-8">
+          <h4 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Forecast Concentration</h4>
+          <ObservationCard signal={forecastConcentration} />
+        </section>
+      )}
+
+      <p className="text-xs text-ink/40">
+        Trend-over-time analysis (forecast accuracy, referral concentration history, quote win rate) needs more than
+        one month of `activity_events`/`recommendations` history to be meaningful — these numbers will get richer as
+        that accumulates.
+      </p>
+    </div>
+  );
+}
+
+function MonthStat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: "positive" | "warning" }) {
+  const valueClass = accent === "positive" ? "text-positive" : accent === "warning" ? "text-warning" : "text-ink";
+  return (
+    <div className="border border-line border-t-2 border-t-brand-accent bg-surface p-4">
+      <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{label}</div>
+      <div className={`font-mono text-lg tabular-nums ${valueClass}`}>{value}</div>
+      {sub && <div className="mt-0.5 text-[11px] text-ink/50">{sub}</div>}
+    </div>
   );
 }
