@@ -10,6 +10,7 @@ import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import type { TeamMember } from "@/lib/admin/types";
 import type { Role } from "@/lib/profile";
 import type { RecommendationRow } from "@/lib/intelligence/queries";
+import type { BackupRow, CurrentCycleStatus } from "@/lib/backup/queries";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { ReferralsTab } from "./ReferralsTab";
 import { SowTab } from "./SowTab";
@@ -40,6 +41,8 @@ export function Dashboard({
   role,
   team,
   recommendations,
+  backupHistory,
+  currentBackupCycle,
 }: {
   data: DashboardData;
   userEmail: string | undefined;
@@ -50,6 +53,8 @@ export function Dashboard({
   role: Role | null;
   team: TeamMember[];
   recommendations: RecommendationRow[];
+  backupHistory: BackupRow[];
+  currentBackupCycle: CurrentCycleStatus;
 }) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -103,7 +108,9 @@ export function Dashboard({
       {tab === "productivity" && <ProductivityTab entries={contractedWork.timeEntries} />}
       {tab === "projects" && <ProjectsIndex projects={projects} />}
       {tab === "sow" && <SowTab rows={data.sow} />}
-      {tab === "team" && role === "owner" && <TeamTab team={team} />}
+      {tab === "team" && role === "owner" && (
+        <TeamTab team={team} backupHistory={backupHistory} currentBackupCycle={currentBackupCycle} />
+      )}
     </AppShell>
   );
 }

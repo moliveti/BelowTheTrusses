@@ -31,7 +31,7 @@ export const TABS: { key: Tab; label: string; description: string; Icon: (props:
   { key: "productivity", label: "Productivity", description: "Hours logged by person", Icon: ProductivityIcon },
   { key: "projects", label: "Projects", description: "All projects and billing status", Icon: ProjectsIcon },
   { key: "sow", label: "Business Not Materialized", description: "Proposals that didn't convert", Icon: SowIcon },
-  { key: "team", label: "Team", description: "Manage users and access", Icon: TeamIcon },
+  { key: "team", label: "Admin", description: "Users, access, and backups", Icon: TeamIcon },
 ];
 
 export const TAB_KEYS = TABS.map((t) => t.key);

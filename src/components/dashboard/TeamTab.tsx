@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { TeamMember } from "@/lib/admin/types";
 import type { Role } from "@/lib/profile";
+import type { BackupRow, CurrentCycleStatus } from "@/lib/backup/queries";
+import { BackupsSection } from "./BackupsSection";
 
 const ROLES: Role[] = ["owner", "staff", "subcontractor"];
 
@@ -23,11 +25,19 @@ async function errorFromResponse(res: Response): Promise<string> {
   return body.error ?? "Something went wrong.";
 }
 
-export function TeamTab({ team }: { team: TeamMember[] }) {
+export function TeamTab({
+  team,
+  backupHistory,
+  currentBackupCycle,
+}: {
+  team: TeamMember[];
+  backupHistory: BackupRow[];
+  currentBackupCycle: CurrentCycleStatus;
+}) {
   return (
     <div>
       <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
-        <h2 className="text-lg font-normal">Team</h2>
+        <h2 className="text-lg font-normal">Admin</h2>
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Owner Access Only</span>
       </div>
 
@@ -57,6 +67,8 @@ export function TeamTab({ team }: { team: TeamMember[] }) {
           </table>
         </div>
       </section>
+
+      <BackupsSection currentCycle={currentBackupCycle} history={backupHistory} />
     </div>
   );
 }
