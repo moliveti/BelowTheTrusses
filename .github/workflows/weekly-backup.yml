@@ -39,12 +39,19 @@ jobs:
       # but pg_dump refuses to dump from a newer server than itself and
       # Supabase runs Postgres 17 — the PGDG helper script adds the official
       # PostgreSQL apt repo so postgresql-client-17 is actually installable.
+      # ubuntu-latest images ship a v16 client preinstalled, so apt alone
+      # isn't enough: explicitly prepend the v17 binaries onto PATH (via
+      # GITHUB_PATH) so they win over whatever's already on the runner.
       - name: Install PostgreSQL 17 client tools
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-common
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Verify pg_dump version
+        run: pg_dump --version
 
       - name: Install dependencies
         run: npm ci
