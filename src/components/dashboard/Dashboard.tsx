@@ -12,6 +12,7 @@ import type { Role } from "@/lib/profile";
 import type { RecommendationRow } from "@/lib/intelligence/queries";
 import type { Signal } from "@/lib/intelligence/types";
 import type { BackupRow, CurrentCycleStatus } from "@/lib/backup/queries";
+import type { GovernmentOpportunity } from "@/lib/government/types";
 import { yearTotal, yoyDeltaPct, referralTotals } from "@/lib/dashboard/aggregate";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { AIAnalyticsTab } from "./AIAnalyticsTab";
@@ -47,6 +48,7 @@ export function Dashboard({
   weeklyExtras,
   backupHistory,
   currentBackupCycle,
+  gaOpportunities,
 }: {
   data: DashboardData;
   userEmail: string | undefined;
@@ -60,6 +62,7 @@ export function Dashboard({
   weeklyExtras: Signal[];
   backupHistory: BackupRow[];
   currentBackupCycle: CurrentCycleStatus;
+  gaOpportunities: GovernmentOpportunity[];
 }) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -114,7 +117,12 @@ export function Dashboard({
         />
       )}
       {tab === "ai-analytics" && (
-        <AIAnalyticsTab collectedRows={data.collected} forecastRows={data.forecast} currentYear={currentYear} />
+        <AIAnalyticsTab
+          collectedRows={data.collected}
+          forecastRows={data.forecast}
+          currentYear={currentYear}
+          gaOpportunities={gaOpportunities}
+        />
       )}
       {tab === "leads" && (
         <LeadsTab leads={leads} referralSources={data.referralSources} milestoneTemplates={milestoneTemplates} />
