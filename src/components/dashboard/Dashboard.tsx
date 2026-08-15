@@ -116,10 +116,6 @@ export function Dashboard({
       <aside
         className={`fixed left-0 top-0 z-30 flex h-screen ${sidebarWidth} flex-col border-r border-line bg-canvas transition-[width] duration-150`}
       >
-        <div className="flex items-center justify-center border-b border-line py-4">
-          <Image src="/logo.png" alt="Below the Trusses" width={40} height={40} className="h-10 w-10 shrink-0" />
-        </div>
-
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto py-3">
           {visibleTabs.map((t) => (
             <div key={t.key} className="group relative px-2">
@@ -153,22 +149,20 @@ export function Dashboard({
           <ChevronIcon direction={sidebarExpanded ? "left" : "right"} className="h-4 w-4" />
           {sidebarExpanded && <span className="font-mono text-[10px] uppercase tracking-wide">Collapse</span>}
         </button>
-
-        <div className="border-t border-line p-2.5">
-          {sidebarExpanded ? (
-            <>
-              {userEmail && <p className="mb-1.5 truncate px-0.5 text-[10.5px] text-ink/50">{userEmail}</p>}
-              <SignOutButton />
-            </>
-          ) : (
-            <SignOutButton iconOnly />
-          )}
-        </div>
       </aside>
 
-      <main
-        className={`min-h-screen px-6 py-10 transition-[margin] duration-150 md:px-10 ${sidebarExpanded ? "ml-56" : "ml-16"}`}
-      >
+      <div className={`min-h-screen transition-[margin] duration-150 ${sidebarExpanded ? "ml-56" : "ml-16"}`}>
+        <header className="sticky top-0 z-20 border-b border-line bg-canvas px-6 py-6 md:px-10">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+            <Image src="/logo.png" alt="Below the Trusses" width={236} height={128} className="h-32 w-auto" />
+            <div className="text-right">
+              {userEmail && <p className="mb-1.5 text-xs text-ink/60">{userEmail}</p>}
+              <SignOutButton />
+            </div>
+          </div>
+        </header>
+
+        <main className="px-6 py-10 md:px-10">
         <div className="mx-auto max-w-6xl">
           {tab === "today" && <TodayTab recommendations={recommendations} />}
           {tab === "financial" && (
@@ -208,7 +202,8 @@ export function Dashboard({
           {tab === "sow" && <SowTab rows={data.sow} />}
           {tab === "team" && role === "owner" && <TeamTab team={team} />}
         </div>
-      </main>
+        </main>
+      </div>
     </>
   );
 }
