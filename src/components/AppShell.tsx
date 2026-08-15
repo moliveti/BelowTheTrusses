@@ -24,15 +24,22 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <>
-      <AppSidebar role={role} expanded={expanded} onToggleExpanded={() => setExpanded((v) => !v)} />
+      <AppSidebar
+        role={role}
+        expanded={expanded}
+        onToggleExpanded={() => setExpanded((v) => !v)}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+      />
 
       <div className={`min-h-screen transition-[margin] duration-150 ${expanded ? SIDEBAR_MARGIN_CLASS.expanded : SIDEBAR_MARGIN_CLASS.collapsed}`}>
-        <AppHeader userEmail={userEmail} breadcrumb={breadcrumb} />
+        <AppHeader userEmail={userEmail} breadcrumb={breadcrumb} onOpenMobileNav={() => setMobileOpen(true)} />
 
-        <main className="px-6 py-10 md:px-10">
+        <main className="px-4 py-6 sm:px-6 sm:py-10 md:px-10">
           <div className="mx-auto max-w-6xl">{children}</div>
         </main>
       </div>

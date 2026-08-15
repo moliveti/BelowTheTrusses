@@ -48,8 +48,8 @@ export const TABS: { key: Tab; label: string; description: string; Icon: (props:
 
 export const TAB_KEYS = TABS.map((t) => t.key);
 
-export const SIDEBAR_WIDTH_CLASS = { collapsed: "w-16", expanded: "w-56" } as const;
-export const SIDEBAR_MARGIN_CLASS = { collapsed: "ml-16", expanded: "ml-56" } as const;
+export const SIDEBAR_WIDTH_CLASS = { collapsed: "sm:w-16", expanded: "sm:w-56" } as const;
+export const SIDEBAR_MARGIN_CLASS = { collapsed: "sm:ml-16", expanded: "sm:ml-56" } as const;
 
 function tabHref(key: Tab): string {
   return key === "financial" ? "/" : `/?tab=${key}`;
@@ -67,10 +67,14 @@ export function AppSidebar({
   role,
   expanded,
   onToggleExpanded,
+  mobileOpen,
+  onCloseMobile,
 }: {
   role: Role | null;
   expanded: boolean;
   onToggleExpanded: () => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -83,39 +87,56 @@ export function AppSidebar({
   const visibleTabs = TABS.filter((t) => t.key !== "team" || role === "owner");
   const width = expanded ? SIDEBAR_WIDTH_CLASS.expanded : SIDEBAR_WIDTH_CLASS.collapsed;
 
+  function goTo(key: Tab) {
+    router.push(tabHref(key));
+    onCloseMobile();
+  }
+
   return (
-    <aside className={`fixed left-0 top-0 z-30 flex h-screen ${width} flex-col border-r border-line bg-canvas transition-[width] duration-150`}>
-      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto py-3">
-        {visibleTabs.map((t) => (
-          <div key={t.key} className="group relative px-2">
-            <button
-              onClick={() => router.push(tabHref(t.key))}
-              className={`flex w-full items-center gap-3 rounded px-2.5 py-2.5 text-left transition ${
-                activeTab === t.key ? "bg-brand-primary text-white" : "text-ink/60 hover:bg-ink/5 hover:text-ink"
-              }`}
-            >
-              <t.Icon className="h-[18px] w-[18px] shrink-0" />
-              {expanded && <span className="truncate font-mono text-[11px] uppercase tracking-wide">{t.label}</span>}
-            </button>
+    <>
+      {mobileOpen && (
+        <div onClick={onCloseMobile} className="fixed inset-0 z-30 bg-ink/40 sm:hidden" aria-hidden="true" />
+      )}
 
-            {!expanded && (
-              <div className="pointer-events-none absolute left-full top-1/2 z-40 ml-2 -translate-y-1/2 whitespace-nowrap rounded bg-ink px-2.5 py-1.5 text-xs text-white opacity-0 shadow-md transition-opacity duration-100 group-hover:opacity-100">
-                <div className="font-medium">{t.label}</div>
-                <div className="text-[10.5px] text-white/70">{t.description}</div>
-              </div>
-            )}
-          </div>
-        ))}
-      </nav>
-
-      <button
-        onClick={onToggleExpanded}
-        className="flex items-center justify-center gap-2 border-t border-line py-3 text-ink/50 hover:text-ink"
-        title={expanded ? "Collapse" : "Expand"}
+      <aside
+        className={`fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-line bg-canvas transition-transform duration-200 sm:z-30 sm:w-auto sm:translate-x-0 sm:transition-[width] sm:duration-150 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        } ${width}`}
       >
-        <ChevronIcon direction={expanded ? "left" : "right"} className="h-4 w-4" />
-        {expanded && <span className="font-mono text-[10px] uppercase tracking-wide">Collapse</span>}
-      </button>
-    </aside>
+        <nav className="flex flex-1 flex-col gap-0.5 py-3">
+          {visibleTabs.map((t) => (
+            <div key={t.key} className="group relative px-2">
+              <button
+                onClick={() => goTo(t.key)}
+                className={`flex w-full items-center gap-3 rounded px-2.5 py-2.5 text-left transition ${
+                  activeTab === t.key ? "bg-brand-primary text-white" : "text-ink/60 hover:bg-ink/5 hover:text-ink"
+                }`}
+              >
+                <t.Icon className="h-[18px] w-[18px] shrink-0" />
+                <span className={`truncate font-mono text-[11px] uppercase tracking-wide ${expanded ? "" : "sm:hidden"}`}>
+                  {t.label}
+                </span>
+              </button>
+
+              {!expanded && (
+                <div className="pointer-events-none absolute left-full top-1/2 z-40 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded bg-ink px-2.5 py-1.5 text-xs text-white opacity-0 shadow-md transition-opacity duration-100 group-hover:opacity-100 sm:block">
+                  <div className="font-medium">{t.label}</div>
+                  <div className="text-[10.5px] text-white/70">{t.description}</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </nav>
+
+        <button
+          onClick={onToggleExpanded}
+          className="hidden items-center justify-center gap-2 border-t border-line py-3 text-ink/50 hover:text-ink sm:flex"
+          title={expanded ? "Collapse" : "Expand"}
+        >
+          <ChevronIcon direction={expanded ? "left" : "right"} className="h-4 w-4" />
+          {expanded && <span className="font-mono text-[10px] uppercase tracking-wide">Collapse</span>}
+        </button>
+      </aside>
+    </>
   );
 }
