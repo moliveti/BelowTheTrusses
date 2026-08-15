@@ -3,8 +3,10 @@ import { getAllMilestonesForIntelligence } from "@/lib/projects/queries";
 import type { Lead } from "@/lib/leads/types";
 import type { DashboardData } from "@/lib/dashboard/types";
 import type { ProjectListItem } from "@/lib/projects/types";
+import type { TimeEntry } from "@/lib/hours/types";
 import {
   agingSowSignals,
+  contractorHoursPendingSignal,
   forecastConcentrationSignal,
   milestonesDueThisMonth,
   milestonesDueThisWeek,
@@ -42,6 +44,7 @@ export interface IntelligenceInputs {
   leads: Lead[];
   dashboardData: DashboardData;
   projects: ProjectListItem[];
+  timeEntries: TimeEntry[];
 }
 
 // Today shows only what's genuinely actionable today: overdue money,
@@ -52,12 +55,24 @@ export interface IntelligenceInputs {
 // concentration) are computed elsewhere for This Week/This Month, where
 // "how healthy is the pipeline" is the actual question being asked.
 function computeSignals(inputs: IntelligenceInputs, milestones: Awaited<ReturnType<typeof getAllMilestonesForIntelligence>>, now: Date): Signal[] {
+  const payableEntries = inputs.timeEntries.map((e) => ({
+    id: e.id,
+    subcontractorId: e.subcontractorId,
+    subcontractorName: e.subcontractorName,
+    workDate: e.workDate,
+    hours: e.hours,
+    hourlyRate: e.hourlyRate,
+    paidAt: e.paidAt,
+  }));
+  const contractorSignal = contractorHoursPendingSignal(payableEntries, now);
+
   return [
     ...staleLeadSignals(inputs.leads, now),
     ...agingSowSignals(inputs.dashboardData.sow, now),
     ...overdueMilestoneSignals(milestones, now),
     ...milestonesDueThisWeek(milestones, now),
     ...milestonesDueThisMonth(milestones, now),
+    ...(contractorSignal ? [contractorSignal] : []),
   ];
 }
 

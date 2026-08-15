@@ -582,6 +582,32 @@ function RecommendationCard({
     router.refresh();
   }
 
+  async function markContractorHoursPaid() {
+    setBusy(true);
+    const supabase = createClient();
+    const today = toIsoDate(new Date());
+    const entryIds = Array.isArray(rec.context.entryIds) ? (rec.context.entryIds as string[]) : [];
+    if (entryIds.length === 0) {
+      setBusy(false);
+      return;
+    }
+    const { error } = await supabase.from("subcontractor_time_entries").update({ paid_at: today }).in("id", entryIds);
+    if (error) {
+      setBusy(false);
+      return;
+    }
+    await logActivity(supabase, {
+      entityTable: "subcontractor_time_entries",
+      entityId: entryIds[0],
+      eventType: "contractor_hours_paid",
+      summary: `Marked ${entryIds.length} time entr${entryIds.length === 1 ? "y" : "ies"} paid from Today`,
+      newValue: { paid_at: today, entry_ids: entryIds },
+      recommendationId: rec.id,
+    });
+    await markHandled("marked_paid");
+    router.refresh();
+  }
+
   async function suggestDecline() {
     setBusy(true);
     const supabase = createClient();
@@ -646,6 +672,11 @@ function RecommendationCard({
           )}
           {isMilestone && (
             <button onClick={markMilestonePaid} disabled={busy} className="font-mono text-[10px] uppercase text-positive underline underline-offset-2 disabled:opacity-50">
+              Mark Paid
+            </button>
+          )}
+          {rec.type === "contractor_hours_pending" && (
+            <button onClick={markContractorHoursPaid} disabled={busy} className="font-mono text-[10px] uppercase text-positive underline underline-offset-2 disabled:opacity-50">
               Mark Paid
             </button>
           )}

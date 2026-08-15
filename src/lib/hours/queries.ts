@@ -27,7 +27,7 @@ export async function getMyTimeEntries(subcontractorId: string): Promise<TimeEnt
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("subcontractor_time_entries")
-    .select("id, subcontractor_id, project_id, work_date, hours, work_description, hourly_rate, projects(name)")
+    .select("id, subcontractor_id, project_id, work_date, hours, work_description, hourly_rate, paid_at, projects(name)")
     .eq("subcontractor_id", subcontractorId)
     .order("work_date", { ascending: false });
   if (error) throw new Error(`subcontractor_time_entries: ${error.message}`);
@@ -44,6 +44,7 @@ export async function getMyTimeEntries(subcontractorId: string): Promise<TimeEnt
       hours: r.hours,
       workDescription: r.work_description,
       hourlyRate: r.hourly_rate,
+      paidAt: r.paid_at,
     };
   });
 }
@@ -53,7 +54,7 @@ export async function getAllTimeEntriesForAdmin(): Promise<TimeEntry[]> {
   const { data, error } = await supabase
     .from("subcontractor_time_entries")
     .select(
-      "id, subcontractor_id, project_id, work_date, hours, work_description, hourly_rate, subcontractors(name), projects(name)"
+      "id, subcontractor_id, project_id, work_date, hours, work_description, hourly_rate, paid_at, subcontractors(name), projects(name)"
     )
     .order("work_date", { ascending: false });
   if (error) throw new Error(`subcontractor_time_entries (admin): ${error.message}`);
@@ -71,6 +72,7 @@ export async function getAllTimeEntriesForAdmin(): Promise<TimeEntry[]> {
       hours: r.hours,
       workDescription: r.work_description,
       hourlyRate: r.hourly_rate,
+      paidAt: r.paid_at,
     };
   });
 }

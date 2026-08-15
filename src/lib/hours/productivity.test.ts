@@ -13,6 +13,7 @@ function makeEntry(overrides: Partial<TimeEntry>): TimeEntry {
     hours: 4,
     workDescription: "Plans",
     hourlyRate: 80,
+    paidAt: null,
     ...overrides,
   };
 }

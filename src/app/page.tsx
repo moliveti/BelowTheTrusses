@@ -13,27 +13,10 @@ import { getLeads } from "@/lib/leads/queries";
 import { getMilestoneTemplates } from "@/lib/milestoneTemplates/queries";
 import { getTeamMembers } from "@/lib/admin/queries";
 import { getActiveRecommendations, getWeeklyExtras } from "@/lib/intelligence/queries";
-import { getBackupHistory, getCurrentCycleStatus, type BackupRow, type CurrentCycleStatus } from "@/lib/backup/queries";
+import { getBackupHistory, getCurrentCycleStatus } from "@/lib/backup/queries";
 import { currentBackupCycleDate } from "@/lib/backup/cycle";
 import { getMyRole } from "@/lib/profile";
 import { Dashboard } from "@/components/dashboard/Dashboard";
-
-// TODO: remove this fallback once migration 0014 (system_backups) is
-// confirmed applied in production — until then the table doesn't exist,
-// and without this the whole page would throw instead of just showing an
-// empty Backups & Recovery section.
-async function safeBackupData(): Promise<{ history: BackupRow[]; cycle: CurrentCycleStatus }> {
-  try {
-    const [history, cycle] = await Promise.all([getBackupHistory(), getCurrentCycleStatus()]);
-    return { history, cycle };
-  } catch {
-    const cycleDate = currentBackupCycleDate(new Date());
-    return {
-      history: [],
-      cycle: { cycleDate, validBackup: null, hasActiveRun: false, hasFailedAttempt: false, isOverdue: false },
-    };
-  }
-}
 
 export default async function HomePage() {
   const role = await getMyRole();
@@ -60,11 +43,14 @@ export default async function HomePage() {
       role === "owner" ? getTeamMembers() : Promise.resolve([]),
     ]);
 
-  // Reuses the leads/dashboard/projects data already fetched above rather
-  // than re-querying them inside the intelligence layer.
-  const recommendations = await getActiveRecommendations({ leads, dashboardData: data, projects });
-  const weeklyExtras = getWeeklyExtras({ leads, dashboardData: data, projects });
-  const { history: backupHistory, cycle: currentBackupCycle } = role === "owner" ? await safeBackupData() : { history: [], cycle: { cycleDate: currentBackupCycleDate(new Date()), validBackup: null, hasActiveRun: false, hasFailedAttempt: false, isOverdue: false } };
+  // Reuses the leads/dashboard/projects/time-entry data already fetched
+  // above rather than re-querying them inside the intelligence layer.
+  const intelligenceInputs = { leads, dashboardData: data, projects, timeEntries };
+  const recommendations = await getActiveRecommendations(intelligenceInputs);
+  const weeklyExtras = getWeeklyExtras(intelligenceInputs);
+  const { history: backupHistory, cycle: currentBackupCycle } = role === "owner"
+    ? await Promise.all([getBackupHistory(), getCurrentCycleStatus()]).then(([history, cycle]) => ({ history, cycle }))
+    : { history: [], cycle: { cycleDate: currentBackupCycleDate(new Date()), validBackup: null, hasActiveRun: false, hasFailedAttempt: false, isOverdue: false } };
 
   return (
     <Dashboard

@@ -354,6 +354,7 @@ function ManualEntryForm({
       hours: data.hours,
       workDescription: data.work_description,
       hourlyRate: data.hourly_rate,
+      paidAt: null,
     });
     setHours("");
     setDescription("");

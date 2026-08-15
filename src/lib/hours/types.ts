@@ -9,6 +9,8 @@ export interface TimeEntry {
   workDescription: string;
   /** Rate frozen at the moment this entry was logged — never re-derived later. */
   hourlyRate: number | null;
+  /** Date the subcontractor was actually paid for this entry — null until marked paid. */
+  paidAt: string | null;
 }
 
 export interface ProjectOption {
