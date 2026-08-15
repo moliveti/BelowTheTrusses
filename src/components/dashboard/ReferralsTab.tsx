@@ -27,13 +27,11 @@ export function ReferralsTab({
         Lifetime totals by referrer — click a row to see its year-over-year breakdown.
         {mode === "revenue_forecast" && " The lighter segment is still-outstanding forecast, not yet collected."}
       </p>
-      <div className="max-w-3xl">
-        <ReferralList
-          collectedRows={collectedRows}
-          forecastRows={mode === "revenue_forecast" ? forecastRows : []}
-          referralSources={referralSources}
-        />
-      </div>
+      <ReferralList
+        collectedRows={collectedRows}
+        forecastRows={mode === "revenue_forecast" ? forecastRows : []}
+        referralSources={referralSources}
+      />
     </div>
   );
 }
