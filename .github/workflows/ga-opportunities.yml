@@ -18,9 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # @supabase/supabase-js's realtime client requires Node's native
+      # WebSocket global (stable from Node 22) — createClient() throws
+      # synchronously on Node 20, before this script's fetch logic even runs.
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install dependencies
         run: npm ci
