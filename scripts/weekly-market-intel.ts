@@ -183,9 +183,18 @@ async function main() {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Record whatever usage happened before the failure — otherwise a run
+    // that dies partway through silently under-reports real spend.
+    const partialCost = usage.searchRequests * EST_COST_PER_SEARCH + usage.aiSummaryCalls * EST_COST_PER_AI_CALL;
     await supabase
       .from("market_intel_runs")
-      .update({ status: "failed", error_summary: message.slice(0, 2000) })
+      .update({
+        status: "failed",
+        error_summary: message.slice(0, 2000),
+        search_requests: usage.searchRequests,
+        ai_summary_calls: usage.aiSummaryCalls,
+        estimated_cost_usd: Math.round(partialCost * 100) / 100,
+      })
       .eq("week_of", weekOf);
     throw err;
   }

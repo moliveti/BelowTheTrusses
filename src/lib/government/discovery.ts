@@ -13,6 +13,19 @@ import Anthropic from "@anthropic-ai/sdk";
 import { tavilySearch, type TavilyResult } from "./tavily";
 import { computeFitScore, FIT_SCORE_DISCARD_THRESHOLD } from "./scoring";
 
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 5000): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** i));
+    }
+  }
+  throw lastErr;
+}
+
 export type LeadSector = "commercial_bd_target" | "institutional_pipeline";
 export type LeadState = "GA" | "FL";
 
@@ -97,23 +110,29 @@ async function extractLeads(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set — cannot run AI extraction step");
 
-  const client = new Anthropic({ apiKey });
-  const response = await client.messages.create({
-    model: "claude-opus-5",
-    max_tokens: 4096,
-    output_config: { effort: "low" },
-    system: EXTRACTION_SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: JSON.stringify({
-          sector,
-          state,
-          candidates: candidates.map((c) => ({ title: c.title, url: c.url, content: c.content.slice(0, 1500) })),
-        }),
-      },
-    ],
-  });
+  // This runs unattended once a week — a transient 5xx/overloaded error
+  // from Anthropic shouldn't sink the whole run (the SDK's own default
+  // retries can still exhaust during a real capacity spike), so retry with
+  // backoff on top of that before giving up.
+  const client = new Anthropic({ apiKey, maxRetries: 3 });
+  const response = await withRetry(() =>
+    client.messages.create({
+      model: "claude-opus-5",
+      max_tokens: 4096,
+      output_config: { effort: "low" },
+      system: EXTRACTION_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: JSON.stringify({
+            sector,
+            state,
+            candidates: candidates.map((c) => ({ title: c.title, url: c.url, content: c.content.slice(0, 1500) })),
+          }),
+        },
+      ],
+    })
+  );
   usage.aiSummaryCalls += 1;
 
   if (response.stop_reason === "refusal") return [];
