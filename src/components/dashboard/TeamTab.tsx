@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { TeamMember } from "@/lib/admin/types";
 import type { Role } from "@/lib/profile";
 import type { BackupRow, CurrentCycleStatus } from "@/lib/backup/queries";
+import type { MarketIntelRun } from "@/lib/government/types";
 import { BackupsSection } from "./BackupsSection";
 
 const ROLES: Role[] = ["owner", "staff", "subcontractor"];
@@ -29,10 +30,12 @@ export function TeamTab({
   team,
   backupHistory,
   currentBackupCycle,
+  marketIntelRun,
 }: {
   team: TeamMember[];
   backupHistory: BackupRow[];
   currentBackupCycle: CurrentCycleStatus;
+  marketIntelRun: MarketIntelRun | null;
 }) {
   return (
     <div>
@@ -69,7 +72,52 @@ export function TeamTab({
       </section>
 
       <BackupsSection currentCycle={currentBackupCycle} history={backupHistory} />
+
+      <MarketIntelCostSection run={marketIntelRun} />
     </div>
+  );
+}
+
+// Cost transparency for the weekly Market Intelligence Update — so search/AI
+// usage never quietly runs up a bill without the owner seeing it.
+function MarketIntelCostSection({ run }: { run: MarketIntelRun | null }) {
+  return (
+    <section className="mt-10">
+      <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Market Intelligence — Usage &amp; Cost</h3>
+      {!run ? (
+        <div className="border border-line bg-surface p-4 text-sm text-ink/50">No weekly run yet.</div>
+      ) : (
+        <div className="border border-line bg-surface p-4 text-sm">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="font-mono text-xs uppercase tracking-wide text-ink/50">
+              Week of {fmtDate(run.weekOf)}
+            </span>
+            <span
+              className={`font-mono text-[10px] uppercase tracking-wide ${
+                run.status === "completed" ? "text-positive" : run.status === "failed" ? "text-warning" : "text-ink/50"
+              }`}
+            >
+              {run.status}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-wide text-ink/40">Search Requests</div>
+              <div className="font-mono text-lg tabular-nums">{run.searchRequests}</div>
+            </div>
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-wide text-ink/40">AI Summarization Calls</div>
+              <div className="font-mono text-lg tabular-nums">{run.aiSummaryCalls}</div>
+            </div>
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-wide text-ink/40">Estimated Cost</div>
+              <div className="font-mono text-lg tabular-nums">${run.estimatedCostUsd.toFixed(2)}</div>
+            </div>
+          </div>
+          {run.errorSummary && <p className="mt-2 text-xs text-warning">{run.errorSummary}</p>}
+        </div>
+      )}
+    </section>
   );
 }
 

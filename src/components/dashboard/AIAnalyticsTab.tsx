@@ -1,7 +1,7 @@
 "use client";
 
 import type { RevenueRow } from "@/lib/dashboard/types";
-import type { GovernmentOpportunity } from "@/lib/government/types";
+import type { GovernmentOpportunity, MarketIntelLead } from "@/lib/government/types";
 import { YoyChart } from "./YoyChart";
 import { InsightsBlurb } from "./InsightsBlurb";
 import { MarketIntelSection } from "./MarketIntelSection";
@@ -10,12 +10,16 @@ export function AIAnalyticsTab({
   collectedRows,
   forecastRows,
   currentYear,
-  gaOpportunities,
+  opportunities,
+  leads,
+  marketIntelUpdatedAt,
 }: {
   collectedRows: RevenueRow[];
   forecastRows: RevenueRow[];
   currentYear: number;
-  gaOpportunities: GovernmentOpportunity[];
+  opportunities: GovernmentOpportunity[];
+  leads: MarketIntelLead[];
+  marketIntelUpdatedAt: string | null;
 }) {
   return (
     <div>
@@ -34,7 +38,7 @@ export function AIAnalyticsTab({
 
       <InsightsBlurb />
 
-      <MarketIntelSection gaOpportunities={gaOpportunities} />
+      <MarketIntelSection opportunities={opportunities} leads={leads} updatedAt={marketIntelUpdatedAt} />
     </div>
   );
 }

@@ -12,7 +12,7 @@ import type { Role } from "@/lib/profile";
 import type { RecommendationRow } from "@/lib/intelligence/queries";
 import type { Signal } from "@/lib/intelligence/types";
 import type { BackupRow, CurrentCycleStatus } from "@/lib/backup/queries";
-import type { GovernmentOpportunity } from "@/lib/government/types";
+import type { GovernmentOpportunity, MarketIntelLead, MarketIntelRun } from "@/lib/government/types";
 import { yearTotal, yoyDeltaPct, referralTotals } from "@/lib/dashboard/aggregate";
 import { FinancialDashboardTab } from "./FinancialDashboardTab";
 import { AIAnalyticsTab } from "./AIAnalyticsTab";
@@ -48,7 +48,9 @@ export function Dashboard({
   weeklyExtras,
   backupHistory,
   currentBackupCycle,
-  gaOpportunities,
+  opportunities,
+  marketIntelLeads,
+  marketIntelRun,
 }: {
   data: DashboardData;
   userEmail: string | undefined;
@@ -62,7 +64,9 @@ export function Dashboard({
   weeklyExtras: Signal[];
   backupHistory: BackupRow[];
   currentBackupCycle: CurrentCycleStatus;
-  gaOpportunities: GovernmentOpportunity[];
+  opportunities: GovernmentOpportunity[];
+  marketIntelLeads: MarketIntelLead[];
+  marketIntelRun: MarketIntelRun | null;
 }) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -121,7 +125,13 @@ export function Dashboard({
           collectedRows={data.collected}
           forecastRows={data.forecast}
           currentYear={currentYear}
-          gaOpportunities={gaOpportunities}
+          opportunities={opportunities}
+          leads={marketIntelLeads}
+          marketIntelUpdatedAt={
+            marketIntelRun
+              ? new Date(`${marketIntelRun.weekOf}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+              : null
+          }
         />
       )}
       {tab === "leads" && (
@@ -149,7 +159,7 @@ export function Dashboard({
       {tab === "projects" && <ProjectsIndex projects={projects} />}
       {tab === "sow" && <SowTab rows={data.sow} />}
       {tab === "team" && role === "owner" && (
-        <TeamTab team={team} backupHistory={backupHistory} currentBackupCycle={currentBackupCycle} />
+        <TeamTab team={team} backupHistory={backupHistory} currentBackupCycle={currentBackupCycle} marketIntelRun={marketIntelRun} />
       )}
     </AppShell>
   );

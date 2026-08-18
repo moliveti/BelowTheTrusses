@@ -15,7 +15,7 @@ import { getTeamMembers } from "@/lib/admin/queries";
 import { getActiveRecommendations, getWeeklyExtras } from "@/lib/intelligence/queries";
 import { getBackupHistory, getCurrentCycleStatus } from "@/lib/backup/queries";
 import { currentBackupCycleDate } from "@/lib/backup/cycle";
-import { getGaOpportunities } from "@/lib/government/queries";
+import { getOpportunities, getMarketIntelLeads, getLatestMarketIntelRun } from "@/lib/government/queries";
 import { getMyRole } from "@/lib/profile";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 
@@ -30,20 +30,35 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [data, timeEntries, subcontractors, activeProjects, assignments, projects, rates, leads, milestoneTemplates, team, gaOpportunities] =
-    await Promise.all([
-      getDashboardData(),
-      getAllTimeEntriesForAdmin(),
-      getAllSubcontractorOptions(),
-      getAllActiveProjectOptions(),
-      getProjectSubcontractorAssignments(),
-      getProjectsIndex(),
-      getSubcontractorRates(),
-      getLeads(),
-      getMilestoneTemplates(),
-      role === "owner" ? getTeamMembers() : Promise.resolve([]),
-      getGaOpportunities(),
-    ]);
+  const [
+    data,
+    timeEntries,
+    subcontractors,
+    activeProjects,
+    assignments,
+    projects,
+    rates,
+    leads,
+    milestoneTemplates,
+    team,
+    opportunities,
+    marketIntelLeads,
+    marketIntelRun,
+  ] = await Promise.all([
+    getDashboardData(),
+    getAllTimeEntriesForAdmin(),
+    getAllSubcontractorOptions(),
+    getAllActiveProjectOptions(),
+    getProjectSubcontractorAssignments(),
+    getProjectsIndex(),
+    getSubcontractorRates(),
+    getLeads(),
+    getMilestoneTemplates(),
+    role === "owner" ? getTeamMembers() : Promise.resolve([]),
+    getOpportunities(),
+    getMarketIntelLeads(),
+    getLatestMarketIntelRun(),
+  ]);
 
   // Reuses the leads/dashboard/projects/time-entry data already fetched
   // above rather than re-querying them inside the intelligence layer.
@@ -68,7 +83,9 @@ export default async function HomePage() {
       weeklyExtras={weeklyExtras}
       backupHistory={backupHistory}
       currentBackupCycle={currentBackupCycle}
-      gaOpportunities={gaOpportunities}
+      opportunities={opportunities}
+      marketIntelLeads={marketIntelLeads}
+      marketIntelRun={marketIntelRun}
     />
   );
 }

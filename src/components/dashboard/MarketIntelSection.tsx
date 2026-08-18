@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { GovernmentOpportunity, OpportunityCategory, PursuitStatus } from "@/lib/government/types";
+import type { GovernmentOpportunity, LeadSector, MarketIntelLead, PursuitStatus } from "@/lib/government/types";
 
 const PURSUIT_STATUSES: PursuitStatus[] = ["watching", "pursuing", "submitted", "declined", "lost", "won"];
 const PURSUIT_LABEL: Record<PursuitStatus, string> = {
@@ -14,9 +14,27 @@ const PURSUIT_LABEL: Record<PursuitStatus, string> = {
   won: "Won",
 };
 
+const DEFAULT_SHOWN = 5;
+
 function daysUntil(dateIso: string | null): number | null {
   if (!dateIso) return null;
   return Math.ceil((new Date(`${dateIso}T00:00:00Z`).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function StateTag({ state }: { state: "GA" | "FL" }) {
+  return <span className="border border-line px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wide text-ink/50">{state}</span>;
+}
+
+function ViewAllToggle({ expanded, onToggle, hiddenCount }: { expanded: boolean; onToggle: () => void; hiddenCount: number }) {
+  if (hiddenCount <= 0) return null;
+  return (
+    <button
+      onClick={onToggle}
+      className="mt-2 font-mono text-[10px] uppercase tracking-wide text-brand-primary underline underline-offset-2"
+    >
+      {expanded ? "Show Top Picks Only" : `View All Candidates (${hiddenCount} more)`}
+    </button>
+  );
 }
 
 function OpportunityRow({ opp, onChanged }: { opp: GovernmentOpportunity; onChanged: (id: string, status: PursuitStatus) => void }) {
@@ -38,6 +56,12 @@ function OpportunityRow({ opp, onChanged }: { opp: GovernmentOpportunity; onChan
     <div className={`border border-line border-l-4 bg-surface p-3 ${urgent ? "border-l-warning" : "border-l-line"}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
+          <div className="mb-1 flex items-center gap-1.5">
+            <StateTag state={opp.state} />
+            <span className="font-mono text-[9.5px] uppercase tracking-wide text-ink/40">
+              {opp.fitScore !== null ? `Fit ${opp.fitScore}` : ""}
+            </span>
+          </div>
           <a href={opp.detailUrl} target="_blank" rel="noopener noreferrer" className="text-[14px] text-brand-primary underline underline-offset-2">
             {opp.title}
           </a>
@@ -63,98 +87,120 @@ function OpportunityRow({ opp, onChanged }: { opp: GovernmentOpportunity; onChan
   );
 }
 
-function CategoryTag({ label }: { label: string }) {
+function LeadCard({ lead }: { lead: MarketIntelLead }) {
   return (
-    <span className="border border-line px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wide text-ink/50">
-      {label}
-    </span>
+    <div className="border border-line border-l-4 border-l-line bg-surface p-3">
+      <div className="mb-1 flex items-center gap-1.5">
+        <StateTag state={lead.state} />
+        <span className="font-mono text-[9.5px] uppercase tracking-wide text-ink/40">Fit {lead.fitScore}</span>
+        {lead.estimatedValue !== null && (
+          <span className="font-mono text-[9.5px] uppercase tracking-wide text-ink/40">
+            · ${lead.estimatedValue.toLocaleString()}
+          </span>
+        )}
+      </div>
+      <a href={lead.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[14px] text-brand-primary underline underline-offset-2">
+        {lead.title}
+      </a>
+      {lead.description && <p className="mt-1 text-xs text-ink/70">{lead.description}</p>}
+      {lead.organizations.length > 0 && (
+        <p className="mt-1 text-[11px] text-ink/50">
+          {lead.organizations.map((o) => `${o.name} (${o.role})`).join(" · ")}
+        </p>
+      )}
+      {lead.location && <p className="mt-0.5 text-[11px] text-ink/40">{lead.location}</p>}
+      {lead.whyBttFits && <p className="mt-1.5 text-xs text-positive">{lead.whyBttFits}</p>}
+    </div>
   );
 }
 
-function GaPanel({ opportunities }: { opportunities: GovernmentOpportunity[] }) {
+function OpportunityRadarSection({ opportunities }: { opportunities: GovernmentOpportunity[] }) {
   const [rows, setRows] = useState(opportunities);
+  const [expanded, setExpanded] = useState(false);
 
   function onChanged(id: string, status: PursuitStatus) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, pursuitStatus: status } : r)));
   }
 
-  const byCategory = (category: OpportunityCategory) => rows.filter((r) => r.category === category);
-  const sections: { category: OpportunityCategory; label: string }[] = [
-    { category: "interior_design_architecture", label: "Interior Design & Architecture" },
-    { category: "furniture_acquisition", label: "Furniture Acquisition" },
-  ];
+  const shown = expanded ? rows : rows.slice(0, DEFAULT_SHOWN);
 
   return (
-    <div className="border border-line bg-surface p-4">
-      <div className="mb-1 flex items-center justify-between">
-        <h4 className="text-[15px]">Georgia</h4>
-        <span className="font-mono text-[10px] uppercase tracking-wide text-ink/40">Statewide · Government</span>
-      </div>
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        <CategoryTag label="Interior Design & Architecture" />
-        <CategoryTag label="Furniture Acquisition" />
-      </div>
-
+    <section className="mb-8">
+      <h4 className="mb-1 font-mono text-xs uppercase tracking-wide text-ink/60">Opportunity Radar — Pursue Now</h4>
+      <p className="mb-3 text-[11px] text-ink/50">Active government bids you can quote or qualify for now (GA + FL).</p>
       {rows.length === 0 ? (
         <p className="text-sm text-ink/50">No open opportunities right now — check back after the next refresh.</p>
       ) : (
-        sections.map(({ category, label }) => {
-          const items = byCategory(category);
-          if (items.length === 0) return null;
-          return (
-            <div key={category} className="mb-4 last:mb-0">
-              <h5 className="mb-2 font-mono text-[10px] uppercase tracking-wide text-ink/50">
-                {label} ({items.length})
-              </h5>
-              <div className="space-y-2">
-                {items.map((opp) => (
-                  <OpportunityRow key={opp.id} opp={opp} onChanged={onChanged} />
-                ))}
-              </div>
-            </div>
-          );
-        })
+        <>
+          <div className="space-y-2">
+            {shown.map((opp) => (
+              <OpportunityRow key={opp.id} opp={opp} onChanged={onChanged} />
+            ))}
+          </div>
+          <ViewAllToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} hiddenCount={rows.length - DEFAULT_SHOWN} />
+        </>
       )}
-
-      <p className="mt-3 text-[11px] text-ink/40">
-        Sourced from the Georgia Procurement Registry; refreshed a few times a week. Keyword-matched, not a precise
-        category — worth a quick skim for false positives.
-      </p>
-    </div>
+    </section>
   );
 }
 
-function FlPanel() {
+function LeadSectorSection({ title, subtitle, leads }: { title: string; subtitle: string; leads: MarketIntelLead[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? leads : leads.slice(0, DEFAULT_SHOWN);
+
   return (
-    <div className="border border-line bg-surface p-4">
-      <div className="mb-1 flex items-center justify-between">
-        <h4 className="text-[15px]">Florida</h4>
-        <span className="font-mono text-[10px] uppercase tracking-wide text-ink/40">Jacksonville Area</span>
-      </div>
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        <CategoryTag label="Government" />
-        <CategoryTag label="Commercial" />
-        <CategoryTag label="Residential" />
-      </div>
-      <p className="text-sm text-ink/50">
-        Not connected — no free, structured public source was found for Jacksonville-area opportunities across these
-        categories.
-      </p>
-    </div>
+    <section className="mb-8">
+      <h4 className="mb-1 font-mono text-xs uppercase tracking-wide text-ink/60">{title}</h4>
+      <p className="mb-3 text-[11px] text-ink/50">{subtitle}</p>
+      {leads.length === 0 ? (
+        <p className="text-sm text-ink/50">Nothing surfaced this week.</p>
+      ) : (
+        <>
+          <div className="space-y-2">
+            {shown.map((lead) => (
+              <LeadCard key={lead.id} lead={lead} />
+            ))}
+          </div>
+          <ViewAllToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} hiddenCount={leads.length - DEFAULT_SHOWN} />
+        </>
+      )}
+    </section>
   );
 }
 
-export function MarketIntelSection({ gaOpportunities }: { gaOpportunities: GovernmentOpportunity[] }) {
+function bySector(leads: MarketIntelLead[], sector: LeadSector): MarketIntelLead[] {
+  return leads.filter((l) => l.sector === sector);
+}
+
+export function MarketIntelSection({
+  opportunities,
+  leads,
+  updatedAt,
+}: {
+  opportunities: GovernmentOpportunity[];
+  leads: MarketIntelLead[];
+  updatedAt: string | null;
+}) {
   return (
     <section>
       <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
-        <h2 className="text-lg font-normal">Market Intelligence</h2>
-        <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">New Opportunities to Bid</span>
+        <h2 className="text-lg font-normal">Weekly Market Intelligence Update</h2>
+        <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">
+          Florida + Georgia{updatedAt ? ` · Updated ${updatedAt}` : ""}
+        </span>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <GaPanel opportunities={gaOpportunities} />
-        <FlPanel />
-      </div>
+
+      <OpportunityRadarSection opportunities={opportunities} />
+      <LeadSectorSection
+        title="Commercial Business-Development Targets"
+        subtitle="Projects and organizations to proactively approach."
+        leads={bySector(leads, "commercial_bd_target")}
+      />
+      <LeadSectorSection
+        title="Public-Sector / Institutional Pipeline"
+        subtitle="Early-stage public and institutional opportunities worth developing before the bid arrives."
+        leads={bySector(leads, "institutional_pipeline")}
+      />
     </section>
   );
 }
