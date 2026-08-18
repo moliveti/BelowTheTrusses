@@ -13,14 +13,22 @@ import Anthropic from "@anthropic-ai/sdk";
 import { tavilySearch, type TavilyResult } from "./tavily";
 import { computeFitScore, FIT_SCORE_DISCARD_THRESHOLD } from "./scoring";
 
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 5000): Promise<T> {
+// A sustained Anthropic 529 (Overloaded) can last several minutes, not
+// just one blip — this is a once-a-week background job with no real-time
+// deadline, so it's worth waiting it out rather than giving up quickly.
+// Delays: 15s, 30s, 60s, 120s, 240s (~7.5 min total) before failing.
+async function withRetry<T>(fn: () => Promise<T>, attempts = 5, baseDelayMs = 15000): Promise<T> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
     } catch (err) {
       lastErr = err;
-      if (i < attempts - 1) await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** i));
+      if (i < attempts - 1) {
+        const delay = baseDelayMs * 2 ** i;
+        console.log(`Anthropic call failed (attempt ${i + 1}/${attempts}), retrying in ${delay / 1000}s...`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
     }
   }
   throw lastErr;

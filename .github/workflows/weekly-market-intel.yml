@@ -13,7 +13,10 @@ on:
 jobs:
   market-intel:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Generous headroom for the AI-extraction retry backoff (up to ~7.5 min
+    # per sector/state combo if Anthropic is having a sustained overloaded
+    # period) across 4 combos, plus the deterministic GPR/MFMP refresh.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
