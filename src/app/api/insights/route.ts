@@ -39,18 +39,27 @@ export async function GET() {
   const facts = computeYoyInsightFacts(data, currentYear);
 
   const client = new Anthropic({ apiKey });
-  const response = await client.messages.create({
-    model: "claude-opus-5",
-    max_tokens: 1024,
-    output_config: { effort: "low" },
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: JSON.stringify(facts) }],
-  });
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-5",
+      max_tokens: 1024,
+      output_config: { effort: "low" },
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: JSON.stringify(facts) }],
+    });
 
-  if (response.stop_reason === "refusal") {
-    return NextResponse.json({ error: "Could not generate insights." }, { status: 502 });
+    if (response.stop_reason === "refusal") {
+      return NextResponse.json({ error: "Could not generate insights." }, { status: 502 });
+    }
+
+    const text = response.content.find((b) => b.type === "text")?.text ?? "";
+    return NextResponse.json({ text });
+  } catch (err) {
+    // Previously unhandled — a bad/expired key or an account-level issue
+    // (no credits, no model access) surfaced as a bare 500 with no way to
+    // tell which. Surfacing the real message here so it's diagnosable
+    // without needing Vercel's function logs.
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: `Anthropic API call failed: ${message}` }, { status: 502 });
   }
-
-  const text = response.content.find((b) => b.type === "text")?.text ?? "";
-  return NextResponse.json({ text });
 }

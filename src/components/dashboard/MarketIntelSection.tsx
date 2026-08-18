@@ -148,9 +148,10 @@ function OpportunityColumn({
 
   return (
     <div>
-      <h5 className="mb-2 font-mono text-[11px] uppercase tracking-wide text-ink/60">
-        {state === "GA" ? "Georgia" : "Florida"} ({sorted.length})
-      </h5>
+      <h2 className="mb-2 text-lg font-normal">
+        {state === "GA" ? "Georgia" : "Florida"}
+        <span className="ml-2 font-mono text-[11px] uppercase tracking-wide text-ink/40">({sorted.length})</span>
+      </h2>
       {sorted.length === 0 ? (
         <p className="text-sm text-ink/50">No open opportunities right now.</p>
       ) : (
