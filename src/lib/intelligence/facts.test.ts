@@ -272,6 +272,7 @@ function makeProject(overrides: Partial<ProjectListItem>): ProjectListItem {
     clientName: "Test Client",
     type: "Residential",
     active: true,
+    status: null,
     hours: 0,
     totalCost: 0,
     hasUnknownRate: false,

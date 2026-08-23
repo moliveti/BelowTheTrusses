@@ -7,6 +7,7 @@ import type { Assignment, ProjectOption, SubcontractorOption, SubcontractorRates
 import type { ProjectListItem } from "@/lib/projects/types";
 import type { Lead } from "@/lib/leads/types";
 import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
+import type { SelectionCatalogItem } from "@/lib/quotes/types";
 import type { TeamMember } from "@/lib/admin/types";
 import type { Role } from "@/lib/profile";
 import type { RecommendationRow } from "@/lib/intelligence/queries";
@@ -42,6 +43,7 @@ export function Dashboard({
   projects,
   leads,
   milestoneTemplates,
+  selectionCatalog,
   role,
   team,
   recommendations,
@@ -58,6 +60,7 @@ export function Dashboard({
   projects: ProjectListItem[];
   leads: Lead[];
   milestoneTemplates: MilestoneTemplateGroup[];
+  selectionCatalog: SelectionCatalogItem[];
   role: Role | null;
   team: TeamMember[];
   recommendations: RecommendationRow[];
@@ -135,7 +138,13 @@ export function Dashboard({
         />
       )}
       {tab === "leads" && (
-        <LeadsTab leads={leads} referralSources={data.referralSources} milestoneTemplates={milestoneTemplates} />
+        <LeadsTab
+          leads={leads}
+          referralSources={data.referralSources}
+          milestoneTemplates={milestoneTemplates}
+          selectionCatalog={selectionCatalog}
+          role={role}
+        />
       )}
       {tab === "referrals" && (
         <ReferralsTab

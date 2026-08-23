@@ -7,7 +7,11 @@ import type { ReferralSource } from "@/lib/dashboard/types";
 import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import { toIsoDate } from "@/lib/hours/dates";
 import { SCOPE_CATEGORIES } from "@/lib/scope";
+import type { SelectionCatalogItem } from "@/lib/quotes/types";
+import type { Role } from "@/lib/profile";
+import { canBuildQuotes } from "@/lib/permissions";
 import { ProjectKickoffPanel } from "./ProjectKickoffPanel";
+import { QuoteBuilderPanel } from "./QuoteBuilderPanel";
 
 const STATUSES: LeadStatus[] = [
   "New Prospect",
@@ -64,10 +68,14 @@ export function LeadsTab({
   leads: initialLeads,
   referralSources: initialReferralSources,
   milestoneTemplates,
+  selectionCatalog,
+  role,
 }: {
   leads: Lead[];
   referralSources: ReferralSource[];
   milestoneTemplates: MilestoneTemplateGroup[];
+  selectionCatalog: SelectionCatalogItem[];
+  role: Role | null;
 }) {
   const [leads, setLeads] = useState(initialLeads);
   const [referralSources, setReferralSources] = useState(initialReferralSources);
@@ -76,6 +84,8 @@ export function LeadsTab({
   const [sortAsc, setSortAsc] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [kickoffLead, setKickoffLead] = useState<Lead | null>(null);
+  const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
+  const [lastQuoteId, setLastQuoteId] = useState<string | null>(null);
 
   function upsertLead(lead: Lead) {
     setLeads((prev) => [lead, ...prev]);
@@ -239,6 +249,8 @@ export function LeadsTab({
                               onMarkContacted={() => markContacted(lead.id)}
                               onSignedContractRequested={() => setKickoffLead(lead)}
                               onSourceCreated={handleSourceCreated}
+                              canBuildQuote={canBuildQuotes(role)}
+                              onBuildQuoteRequested={() => setQuoteLead(lead)}
                             />
                           </td>
                         </tr>
@@ -262,6 +274,36 @@ export function LeadsTab({
             setKickoffLead(null);
           }}
         />
+      )}
+
+      {quoteLead && (
+        <QuoteBuilderPanel
+          lead={quoteLead}
+          selectionCatalog={selectionCatalog}
+          onClose={() => setQuoteLead(null)}
+          onCreated={({ quoteId }) => {
+            patchLead(quoteLead.id, { status: "Quote Sent", convertedProjectId: quoteLead.convertedProjectId });
+            setLastQuoteId(quoteId);
+            setQuoteLead(null);
+          }}
+        />
+      )}
+
+      {lastQuoteId && (
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 border border-line bg-surface p-3 text-xs shadow-lg">
+          <span>Quote created.</span>
+          <a
+            href={`/api/quotes/${lastQuoteId}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-brand-primary px-3 py-1.5 font-mono text-[10px] uppercase text-white"
+          >
+            Download PDF
+          </a>
+          <button onClick={() => setLastQuoteId(null)} className="text-ink/40 underline underline-offset-2">
+            Dismiss
+          </button>
+        </div>
       )}
     </div>
   );
@@ -698,6 +740,8 @@ function LeadEditPanel({
   onMarkContacted,
   onSignedContractRequested,
   onSourceCreated,
+  canBuildQuote,
+  onBuildQuoteRequested,
 }: {
   lead: Lead;
   referralSources: ReferralSource[];
@@ -705,6 +749,8 @@ function LeadEditPanel({
   onMarkContacted: () => void;
   onSignedContractRequested: () => void;
   onSourceCreated: (source: ReferralSource) => void;
+  canBuildQuote: boolean;
+  onBuildQuoteRequested: () => void;
 }) {
   const [statusError, setStatusError] = useState("");
 
@@ -894,6 +940,14 @@ function LeadEditPanel({
         >
           Mark Contacted Today
         </button>
+        {canBuildQuote && (
+          <button
+            onClick={onBuildQuoteRequested}
+            className="border border-ink px-3 py-1.5 font-mono text-[11px] uppercase text-ink hover:bg-canvas"
+          >
+            Build Quote
+          </button>
+        )}
         {lead.lastContactedDate && (
           <span className="ml-auto font-mono text-[10px] text-ink/40">Last contacted {lead.lastContactedDate}</span>
         )}

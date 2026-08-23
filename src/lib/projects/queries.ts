@@ -30,7 +30,7 @@ export async function getProjectsIndex(): Promise<ProjectListItem[]> {
   const supabase = await createClient();
 
   const [projectsRes, milestonesRes, timeEntriesRes] = await Promise.all([
-    supabase.from("projects").select("id, name, type, active, contract_value, clients(name)").order("name"),
+    supabase.from("projects").select("id, name, type, active, status, contract_value, clients(name)").order("name"),
     supabase.from("milestones").select("project_id, amount_due, amount_paid"),
     supabase.from("subcontractor_time_entries").select("project_id, hours, hourly_rate"),
   ]);
@@ -68,6 +68,7 @@ export async function getProjectsIndex(): Promise<ProjectListItem[]> {
       clientName: client?.name ?? "Unknown",
       type: p.type,
       active: p.active,
+      status: p.status,
       hours: hoursCost.hours,
       totalCost: hoursCost.cost,
       hasUnknownRate: hoursCost.hasUnknownRate,
@@ -85,7 +86,7 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
     supabase
       .from("projects")
       .select(
-        `id, name, type, state, active, notes, contract_signed_date, contract_value, billing_method,
+        `id, name, type, state, active, status, notes, contract_signed_date, contract_value, billing_method,
          hourly_rate, fixed_fee_amount, addon_hours, addon_hourly_rate, furniture_commission_rate,
          furniture_sale_total, start_date, target_completion_date, actual_completion_date,
          clients(name), referral_sources(name)`
@@ -187,6 +188,7 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
     type: p.type,
     state: p.state,
     active: p.active,
+    status: p.status,
     notes: p.notes,
     referralSourceName: referral?.name ?? null,
     contractSignedDate: p.contract_signed_date,

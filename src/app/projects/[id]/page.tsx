@@ -1,11 +1,15 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getMyRole } from "@/lib/profile";
+import { canBuildQuotes } from "@/lib/permissions";
 import { getProjectDetail } from "@/lib/projects/queries";
+import { getQuoteForProject } from "@/lib/quotes/queries";
+import { getContractForProject } from "@/lib/contracts/queries";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
 import { MilestoneSection } from "@/components/projects/MilestoneSection";
 import { ScopeSection } from "@/components/projects/ScopeSection";
+import { ProjectStatusActions } from "@/components/projects/ProjectStatusActions";
 import { fmtUsd } from "@/lib/dashboard/format";
 
 const fmtDate = (d: string | null) => d ?? "—";
@@ -18,6 +22,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const project = await getProjectDetail(id);
   if (!project) notFound();
+
+  const quote = canBuildQuotes(role) ? await getQuoteForProject(id) : null;
+  const contract = canBuildQuotes(role) ? await getContractForProject(id) : null;
 
   const supabase = await createClient();
   const {
@@ -58,6 +65,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </p>
         {project.notes && <p className="mt-2 text-sm text-ink/60">{project.notes}</p>}
       </section>
+
+      {canBuildQuotes(role) && <ProjectStatusActions project={project} quote={quote} contract={contract} />}
 
       <section className="mb-8">
         <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">

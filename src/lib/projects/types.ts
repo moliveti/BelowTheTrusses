@@ -4,6 +4,7 @@ export interface ProjectListItem {
   clientName: string;
   type: string;
   active: boolean;
+  status: "Quoted" | "Contract Sent" | "Under Contract" | null;
   hours: number;
   totalCost: number;
   hasUnknownRate: boolean;
@@ -46,6 +47,7 @@ export interface ProjectDetail {
   type: string;
   state: string | null;
   active: boolean;
+  status: "Quoted" | "Contract Sent" | "Under Contract" | null;
   notes: string | null;
   referralSourceName: string | null;
   contractSignedDate: string | null;
