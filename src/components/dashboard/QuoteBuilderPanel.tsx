@@ -3,9 +3,12 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead } from "@/lib/leads/types";
+import type { ReferralSource } from "@/lib/dashboard/types";
 import type { SelectionCatalogItem } from "@/lib/quotes/types";
-import { QUOTE_TASK_CATALOG } from "@/lib/scope";
+import { QUOTE_TASK_CATALOG, SCOPE_TO_SELECTION_CATEGORIES } from "@/lib/scope";
 import { toIsoDate } from "@/lib/hours/dates";
+import { isValidBudgetRange } from "@/lib/validation";
+import { ScopePills, ReferralSourceSelect } from "./LeadsTab";
 
 const TYPES = ["Residential", "Commercial", "Furniture"] as const;
 const FINISH_SELECTIONS_TASK = "Finish Selections";
@@ -21,19 +24,40 @@ function fmtUsd(n: number): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
+/** Categories relevant to the given scope tags, or every category if none of the tags map to anything (safer than hiding items unexpectedly). */
+function relevantCategories(scopeTags: string[], allCategories: string[]): string[] {
+  const mapped = new Set(scopeTags.flatMap((tag) => SCOPE_TO_SELECTION_CATEGORIES[tag] ?? []));
+  return mapped.size > 0 ? allCategories.filter((c) => mapped.has(c)) : allCategories;
+}
+
 export function QuoteBuilderPanel({
   lead,
   selectionCatalog,
+  referralSources,
   onClose,
   onCreated,
 }: {
-  lead: Lead;
+  lead: Lead | null;
   selectionCatalog: SelectionCatalogItem[];
+  referralSources: ReferralSource[];
   onClose: () => void;
-  onCreated: (result: { projectId: string; quoteId: string }) => void;
+  onCreated: (result: { lead: Lead; projectId: string; quoteId: string }) => void;
 }) {
+  // Standalone intake fields -- only used and shown when there's no lead
+  // yet (e.g. a client calling in directly rather than coming from the
+  // Leads pipeline). When a lead is passed, its own data is used as-is.
+  const [name, setName] = useState(lead?.name ?? "");
+  const [email, setEmail] = useState(lead?.email ?? "");
+  const [phone, setPhone] = useState(lead?.phone ?? "");
+  const [state, setState] = useState(lead?.state ?? "");
+  const [budgetRange, setBudgetRange] = useState(lead?.budgetRange ?? "");
+  const [scopeTags, setScopeTags] = useState<string[]>(lead?.scopeTags ?? []);
+  const [referralSourceId, setReferralSourceId] = useState(lead?.referralSourceId ?? "");
+  const [referralSourceName, setReferralSourceName] = useState<string | null>(lead?.referralSourceName ?? null);
+  const [localReferralSources, setLocalReferralSources] = useState<ReferralSource[]>([]);
+
   const [projectType, setProjectType] = useState<(typeof TYPES)[number]>(
-    (lead.projectType as (typeof TYPES)[number]) || "Residential"
+    (lead?.projectType as (typeof TYPES)[number]) || "Residential"
   );
   const [lineItems, setLineItems] = useState<DraftLineItem[]>(
     QUOTE_TASK_CATALOG.filter((t) => t.taskName !== FINISH_SELECTIONS_TASK).map((t) => ({
@@ -53,6 +77,12 @@ export function QuoteBuilderPanel({
   const [error, setError] = useState("");
 
   const finishSelectionsRate = QUOTE_TASK_CATALOG.find((t) => t.taskName === FINISH_SELECTIONS_TASK)!.rate;
+
+  const allCategories = useMemo(() => Array.from(new Set(selectionCatalog.map((c) => c.category))), [selectionCatalog]);
+  const visibleCategories = useMemo(
+    () => relevantCategories(scopeTags, allCategories),
+    [scopeTags, allCategories]
+  );
 
   const finishSelectionsHours = useMemo(() => {
     return selectionCatalog.reduce((sum, item) => {
@@ -81,17 +111,68 @@ export function QuoteBuilderPanel({
     setLineItems((prev) => prev.map((li, i) => (i === index ? { ...li, ...patch } : li)));
   }
 
-  const categories = Array.from(new Set(selectionCatalog.map((c) => c.category)));
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (!lead && !name.trim()) return setError("Name is required.");
+    if (!lead && !isValidBudgetRange(budgetRange)) return setError('Budget should be a dollar amount or range, e.g. "$10k–$20k".');
+
     setSaving(true);
     const supabase = createClient();
 
+    let effectiveLead: Lead;
+    if (lead) {
+      effectiveLead = lead;
+    } else {
+      const finalReferralSourceId = referralSourceId || null;
+      const finalReferralSourceName = referralSourceName;
+
+      const { data: newLead, error: leadInsertError } = await supabase
+        .from("leads")
+        .insert({
+          name: name.trim(),
+          email: email.trim() || null,
+          phone: phone.trim() || null,
+          project_type: projectType,
+          scope_tags: scopeTags,
+          state: state.trim() || null,
+          budget_range: budgetRange.trim() || null,
+          referral_source_id: finalReferralSourceId,
+          status: "Quote Sent",
+        })
+        .select("id, created_at")
+        .single();
+      if (leadInsertError) {
+        setSaving(false);
+        setError(leadInsertError.message);
+        return;
+      }
+
+      effectiveLead = {
+        id: newLead.id,
+        name: name.trim(),
+        email: email.trim() || null,
+        phone: phone.trim() || null,
+        projectType,
+        state: state.trim() || null,
+        budgetRange: budgetRange.trim() || null,
+        timelineStartMonth: null,
+        timelineEndMonth: null,
+        referralSourceId: finalReferralSourceId,
+        referralSourceName: finalReferralSourceName,
+        notes: null,
+        scopeTags,
+        status: "Quote Sent",
+        lastContactedDate: null,
+        createdAt: newLead.created_at,
+        convertedSowId: null,
+        convertedProjectId: null,
+      };
+    }
+
     const { data: client, error: clientError } = await supabase
       .from("clients")
-      .upsert({ name: lead.name.trim() }, { onConflict: "name" })
+      .upsert({ name: effectiveLead.name.trim() }, { onConflict: "name" })
       .select("id")
       .single();
     if (clientError) {
@@ -104,10 +185,10 @@ export function QuoteBuilderPanel({
       .from("projects")
       .insert({
         client_id: client.id,
-        name: lead.name,
+        name: effectiveLead.name,
         type: projectType,
-        state: lead.state,
-        referral_source_id: lead.referralSourceId,
+        state: effectiveLead.state,
+        referral_source_id: effectiveLead.referralSourceId,
         billing_method: "Fixed Fee",
         active: true,
         status: "Quoted",
@@ -123,7 +204,7 @@ export function QuoteBuilderPanel({
     const { data: quote, error: quoteError } = await supabase
       .from("quotes")
       .insert({
-        lead_id: lead.id,
+        lead_id: effectiveLead.id,
         project_id: project.id,
         project_type: projectType,
         status: "draft",
@@ -190,28 +271,32 @@ export function QuoteBuilderPanel({
       }
     }
 
-    let convertedSowId = lead.convertedSowId;
+    let convertedSowId = effectiveLead.convertedSowId;
     if (!convertedSowId) {
       const { data: sow } = await supabase
         .from("sow_sent")
-        .insert({ date_sent: toIsoDate(new Date()), prospect_name: lead.name, notes: lead.notes, status: "Open" })
+        .insert({ date_sent: toIsoDate(new Date()), prospect_name: effectiveLead.name, notes: effectiveLead.notes, status: "Open" })
         .select("id")
         .single();
       convertedSowId = sow?.id ?? null;
     }
 
-    const { error: leadError } = await supabase
+    const { error: leadUpdateError } = await supabase
       .from("leads")
       .update({ status: "Quote Sent", converted_project_id: project.id, converted_sow_id: convertedSowId })
-      .eq("id", lead.id);
-    if (leadError) {
+      .eq("id", effectiveLead.id);
+    if (leadUpdateError) {
       setSaving(false);
-      setError(leadError.message);
+      setError(leadUpdateError.message);
       return;
     }
 
     setSaving(false);
-    onCreated({ projectId: project.id, quoteId: quote.id });
+    onCreated({
+      lead: { ...effectiveLead, status: "Quote Sent", convertedProjectId: project.id, convertedSowId },
+      projectId: project.id,
+      quoteId: quote.id,
+    });
   }
 
   return (
@@ -221,13 +306,66 @@ export function QuoteBuilderPanel({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
-          <h3 className="text-base text-ink">Build Quote — {lead.name}</h3>
+          <h3 className="text-base text-ink">Build Quote{lead ? ` — ${lead.name}` : ""}</h3>
           <button onClick={onClose} className="font-mono text-xs uppercase text-ink/50 underline underline-offset-2">
             Cancel
           </button>
         </div>
 
         <form onSubmit={submit} className="space-y-5">
+          {!lead && (
+            <div className="border border-line bg-canvas p-3">
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-wide text-ink/60">
+                Client Info — no lead selected, this will create one
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Name *</label>
+                  <input value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Email</label>
+                  <input value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Phone</label>
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">State</label>
+                  <input value={state} onChange={(e) => setState(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Client Budget</label>
+                  <input
+                    value={budgetRange}
+                    onChange={(e) => setBudgetRange(e.target.value)}
+                    placeholder="e.g. $10k–$20k"
+                    className="w-full border border-line px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Referral Source</label>
+                  <ReferralSourceSelect
+                    referralSources={[...referralSources, ...localReferralSources]}
+                    value={referralSourceId}
+                    onChange={(id, sourceName) => {
+                      setReferralSourceId(id);
+                      setReferralSourceName(sourceName ?? null);
+                    }}
+                    onSourceCreated={(source) => setLocalReferralSources((prev) => [...prev, source])}
+                  />
+                </div>
+              </div>
+              {projectType === "Residential" && (
+                <div className="mt-3">
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Scope of Interest</label>
+                  <ScopePills value={scopeTags} onChange={setScopeTags} />
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Project Type</label>
             <div className="flex gap-1">
@@ -278,11 +416,11 @@ export function QuoteBuilderPanel({
 
           <div>
             <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-ink/60">
-              Finish Selections — quantity per item, rolls up into one FFE line at {fmtUsd(finishSelectionsRate)}/hr
-              (currently {finishSelectionsHours} hrs = {fmtUsd(finishSelectionsHours * finishSelectionsRate)})
+              Finish Selections{scopeTags.length > 0 && visibleCategories.length < allCategories.length ? " — filtered to the scope tagged above" : ""} — quantity
+              per item, rolls up into one FFE line at {fmtUsd(finishSelectionsRate)}/hr (currently {finishSelectionsHours} hrs = {fmtUsd(finishSelectionsHours * finishSelectionsRate)})
             </label>
             <div className="max-h-64 overflow-y-auto border border-line bg-canvas">
-              {categories.map((cat) => (
+              {visibleCategories.map((cat) => (
                 <div key={cat} className="border-b border-line p-2 last:border-b-0">
                   <p className="mb-1 font-mono text-[9.5px] uppercase text-ink/40">{cat}</p>
                   <div className="flex flex-wrap gap-2">

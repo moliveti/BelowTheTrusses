@@ -15,6 +15,20 @@ export const SCOPE_CATEGORIES = [
   "Permit Sets",
 ];
 
+// Which selection_catalog categories (Kitchen/Appliances/Bathroom/Paint/
+// Flooring/Lighting) are relevant to each room-based scope tag, so the
+// Quote Builder can show only the finish-selection items that apply
+// instead of the full ~36-item catalog. Scope tags with no natural
+// selection-catalog match (Covered Porch, Home Addition, Permit Sets,
+// etc.) are simply absent here -- when none of a quote's selected scope
+// tags appear as a key, the builder falls back to showing everything
+// rather than guessing and hiding items that might still apply.
+export const SCOPE_TO_SELECTION_CATEGORIES: Record<string, string[]> = {
+  "Kitchen Remodel": ["Kitchen", "Appliances"],
+  "Bathroom Remodel": ["Bathroom"],
+  "Interior Finishes": ["Paint", "Flooring", "Lighting"],
+};
+
 // Quote task checklist, one-to-one with the "SMART BUDGET" tab of the
 // owner's real budgeting spreadsheet: fixed task names and default hourly
 // rate per section, hours left at 0 for the owner to fill in per quote (the

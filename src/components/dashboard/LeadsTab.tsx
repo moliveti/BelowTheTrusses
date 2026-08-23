@@ -10,6 +10,7 @@ import { SCOPE_CATEGORIES } from "@/lib/scope";
 import type { SelectionCatalogItem } from "@/lib/quotes/types";
 import type { Role } from "@/lib/profile";
 import { canBuildQuotes } from "@/lib/permissions";
+import { isValidBudgetRange } from "@/lib/validation";
 import { ProjectKickoffPanel } from "./ProjectKickoffPanel";
 import { QuoteBuilderPanel } from "./QuoteBuilderPanel";
 
@@ -84,7 +85,10 @@ export function LeadsTab({
   const [sortAsc, setSortAsc] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [kickoffLead, setKickoffLead] = useState<Lead | null>(null);
-  const [quoteLead, setQuoteLead] = useState<Lead | null>(null);
+  // A lead object pre-fills the builder from that lead; "standalone" opens
+  // it with no lead yet (e.g. a client calling in directly) -- the builder
+  // itself creates the lead as part of submitting.
+  const [quoteTarget, setQuoteTarget] = useState<Lead | "standalone" | null>(null);
   const [lastQuoteId, setLastQuoteId] = useState<string | null>(null);
 
   function upsertLead(lead: Lead) {
@@ -159,7 +163,17 @@ export function LeadsTab({
       </div>
 
       <section className="mb-10">
-        <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">New Lead</h3>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-mono text-xs uppercase tracking-wide text-ink/60">New Lead</h3>
+          {canBuildQuotes(role) && (
+            <button
+              onClick={() => setQuoteTarget("standalone")}
+              className="border border-ink px-3 py-1.5 font-mono text-[11px] uppercase text-ink hover:bg-canvas"
+            >
+              Build Quote — Client Calling In
+            </button>
+          )}
+        </div>
         <LeadIntakeForm referralSources={referralSources} onAdded={upsertLead} onSourceCreated={handleSourceCreated} />
       </section>
 
@@ -250,7 +264,7 @@ export function LeadsTab({
                               onSignedContractRequested={() => setKickoffLead(lead)}
                               onSourceCreated={handleSourceCreated}
                               canBuildQuote={canBuildQuotes(role)}
-                              onBuildQuoteRequested={() => setQuoteLead(lead)}
+                              onBuildQuoteRequested={() => setQuoteTarget(lead)}
                             />
                           </td>
                         </tr>
@@ -276,15 +290,20 @@ export function LeadsTab({
         />
       )}
 
-      {quoteLead && (
+      {quoteTarget && (
         <QuoteBuilderPanel
-          lead={quoteLead}
+          lead={quoteTarget === "standalone" ? null : quoteTarget}
           selectionCatalog={selectionCatalog}
-          onClose={() => setQuoteLead(null)}
-          onCreated={({ quoteId }) => {
-            patchLead(quoteLead.id, { status: "Quote Sent", convertedProjectId: quoteLead.convertedProjectId });
+          referralSources={referralSources}
+          onClose={() => setQuoteTarget(null)}
+          onCreated={({ lead: resultLead, quoteId }) => {
+            if (leads.some((l) => l.id === resultLead.id)) {
+              patchLead(resultLead.id, resultLead);
+            } else {
+              upsertLead(resultLead);
+            }
             setLastQuoteId(quoteId);
-            setQuoteLead(null);
+            setQuoteTarget(null);
           }}
         />
       )}
@@ -352,7 +371,7 @@ function TypeButtons({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
-function ScopePills({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+export function ScopePills({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   function toggle(tag: string) {
     onChange(value.includes(tag) ? value.filter((t) => t !== tag) : [...value, tag]);
   }
@@ -374,7 +393,7 @@ function ScopePills({ value, onChange }: { value: string[]; onChange: (v: string
   );
 }
 
-function ReferralSourceSelect({
+export function ReferralSourceSelect({
   referralSources,
   value,
   onChange,
@@ -520,6 +539,7 @@ function LeadIntakeForm({
     setSavedMessage(false);
     if (!name.trim()) return setError("Name is required.");
     if (isNewSource && !newSourceName.trim()) return setError("Enter a name for the new referral source.");
+    if (!isValidBudgetRange(budgetRange)) return setError('Budget should be a dollar amount or range, e.g. "$10k–$20k".');
 
     setSaving(true);
     const supabase = createClient();
@@ -753,6 +773,7 @@ function LeadEditPanel({
   onBuildQuoteRequested: () => void;
 }) {
   const [statusError, setStatusError] = useState("");
+  const [budgetError, setBudgetError] = useState("");
 
   async function update(column: string, value: string | string[] | null, patch: Partial<Lead>) {
     const supabase = createClient();
@@ -864,9 +885,18 @@ function LeadEditPanel({
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Client Budget</label>
         <input
           defaultValue={lead.budgetRange ?? ""}
-          onBlur={(e) => update("budget_range", e.target.value || null, { budgetRange: e.target.value || null })}
+          onBlur={(e) => {
+            if (!isValidBudgetRange(e.target.value)) {
+              setBudgetError('Should be a dollar amount or range, e.g. "$10k–$20k".');
+              e.target.value = lead.budgetRange ?? "";
+              return;
+            }
+            setBudgetError("");
+            update("budget_range", e.target.value || null, { budgetRange: e.target.value || null });
+          }}
           className="w-full border border-line px-2 py-1.5 text-xs"
         />
+        {budgetError && <span className="mt-1 block text-[10px] text-warning">{budgetError}</span>}
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Tentative Timeline</label>
