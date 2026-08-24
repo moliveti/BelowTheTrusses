@@ -37,7 +37,7 @@ export const TABS: { key: Tab; label: string; description: string; Icon: (props:
   { key: "financial", label: "Financial Dashboard", description: "Revenue, forecast, and business mix", Icon: ChartIcon },
   { key: "ai-analytics", label: "AI Analytics", description: "What's affecting revenue, and market intel", Icon: AiIcon },
   { key: "today", label: "Priorities", description: "What needs attention today", Icon: PriorityIcon },
-  { key: "leads", label: "Leads", description: "Intake and follow-up pipeline", Icon: LeadsIcon },
+  { key: "leads", label: "Quotes & Leads", description: "Intake, follow-up, and quote building", Icon: LeadsIcon },
   { key: "referrals", label: "Referral Sources", description: "Revenue by referral relationship", Icon: ReferralIcon },
   { key: "contracted", label: "Contracted Work", description: "Subcontractor hours and cost", Icon: ContractedIcon },
   { key: "productivity", label: "Productivity", description: "Hours logged by person", Icon: ProductivityIcon },
