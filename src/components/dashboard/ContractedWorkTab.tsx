@@ -10,6 +10,32 @@ import { fmtUsd } from "@/lib/dashboard/format";
 import { RateSettings } from "./RateSettings";
 
 type StatusFilter = "all" | "pending" | "paid";
+type DateRangeFilter = "all" | "week" | "month" | "quarter" | "year";
+
+function dateRangeBounds(range: DateRangeFilter, now: Date): { start: string; end: string } | null {
+  if (range === "all") return null;
+  if (range === "week") {
+    return { start: toIsoDate(startOfWeek(now)), end: toIsoDate(endOfWeek(now)) };
+  }
+  if (range === "month") {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { start: toIsoDate(start), end: toIsoDate(end) };
+  }
+  if (range === "quarter") {
+    const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+    const start = new Date(now.getFullYear(), quarterStartMonth, 1);
+    const end = new Date(now.getFullYear(), quarterStartMonth + 3, 0);
+    return { start: toIsoDate(start), end: toIsoDate(end) };
+  }
+  const start = new Date(now.getFullYear(), 0, 1);
+  const end = new Date(now.getFullYear(), 11, 31);
+  return { start: toIsoDate(start), end: toIsoDate(end) };
+}
+
+function matchesDateRange(e: TimeEntry, bounds: { start: string; end: string } | null): boolean {
+  return bounds === null || (e.workDate >= bounds.start && e.workDate <= bounds.end);
+}
 
 function isPaid(e: TimeEntry): boolean {
   return e.paidAt !== null;
@@ -122,6 +148,7 @@ export function ContractedWorkTab({
   const [subFilter, setSubFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeFilter>("all");
   const [subTab, setSubTab] = useState<"overview" | "time" | "rates" | "assignments">("overview");
   const [expandedSubId, setExpandedSubId] = useState<string | null>(null);
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
@@ -135,16 +162,19 @@ export function ContractedWorkTab({
   const weekEndIso = toIsoDate(endOfWeek(new Date()));
 
   // Shared by both Overview and Time Input -- one filter bar drives
-  // everything, per the ask to be able to filter all of it by billing status.
+  // everything, per the ask to be able to filter all of it by billing status
+  // and by date range.
+  const dateBounds = useMemo(() => dateRangeBounds(dateRangeFilter, new Date()), [dateRangeFilter]);
   const filtered = useMemo(
     () =>
       entries.filter(
         (e) =>
           (subFilter === "all" || e.subcontractorId === subFilter) &&
           (projFilter === "all" || e.projectId === projFilter) &&
-          matchesStatus(e, statusFilter)
+          matchesStatus(e, statusFilter) &&
+          matchesDateRange(e, dateBounds)
       ),
-    [entries, subFilter, projFilter, statusFilter]
+    [entries, subFilter, projFilter, statusFilter, dateBounds]
   );
 
   const thisWeek = filtered.filter((e) => e.workDate >= weekStartIso && e.workDate <= weekEndIso);
@@ -235,6 +265,17 @@ export function ContractedWorkTab({
             <option value="all">All billing status</option>
             <option value="pending">Pending</option>
             <option value="paid">Paid</option>
+          </select>
+          <select
+            value={dateRangeFilter}
+            onChange={(e) => setDateRangeFilter(e.target.value as DateRangeFilter)}
+            className="border border-line px-2 py-1 text-xs"
+          >
+            <option value="all">All time</option>
+            <option value="week">This week</option>
+            <option value="month">This month</option>
+            <option value="quarter">This quarter</option>
+            <option value="year">This year</option>
           </select>
           {pendingCount > 0 && (
             <button
