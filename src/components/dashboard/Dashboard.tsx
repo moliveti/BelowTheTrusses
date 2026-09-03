@@ -155,7 +155,7 @@ export function Dashboard({
           onModeChange={setMode}
         />
       )}
-      {tab === "contracted" && (
+      {tab === "contracted" && role === "owner" && (
         <ContractedWorkTab
           entries={contractedWork.timeEntries}
           subcontractors={contractedWork.subcontractors}

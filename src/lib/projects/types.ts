@@ -38,6 +38,10 @@ export interface ProjectHourRow {
   rate: number | null;
   allocatedHours: number | null;
   cost: number | null;
+  paidHours: number;
+  paidCost: number;
+  pendingHours: number;
+  pendingCost: number;
 }
 
 export interface ProjectDetail {

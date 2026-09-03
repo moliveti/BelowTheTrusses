@@ -10,6 +10,7 @@ import { AppShell } from "@/components/AppShell";
 import { MilestoneSection } from "@/components/projects/MilestoneSection";
 import { ScopeSection } from "@/components/projects/ScopeSection";
 import { ProjectStatusActions } from "@/components/projects/ProjectStatusActions";
+import { HoursCostSection } from "@/components/projects/HoursCostSection";
 import { fmtUsd } from "@/lib/dashboard/format";
 
 const fmtDate = (d: string | null) => d ?? "—";
@@ -114,48 +115,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         hasHoursLogged={project.hoursByPerson.length > 0}
       />
 
-      <section>
-        <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">
-          Hours &amp; Cost
-        </h3>
-        {project.hoursByPerson.length === 0 ? (
+      {project.hoursByPerson.length === 0 ? (
+        <section>
+          <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">
+            Hours &amp; Cost
+          </h3>
           <div className="border border-line bg-surface p-4 text-sm text-ink/50">No hours logged on this project yet.</div>
-        ) : (
-          <div className="overflow-x-auto border border-line bg-surface">
-            <table className="w-full min-w-[560px] border-collapse text-[13px]">
-              <thead>
-                <tr className="border-b-2 border-ink">
-                  <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Name</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Hours</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Allocated</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Rate</th>
-                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {project.hoursByPerson.map((h) => (
-                  <tr key={h.subcontractorId} className="border-b border-line">
-                    <td className="px-3 py-2">{h.subcontractorName}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{h.hours.toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{h.allocatedHours !== null ? h.allocatedHours.toFixed(1) : "—"}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{h.rate !== null ? fmtUsd(h.rate) + "/hr" : "—"}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{h.cost !== null ? fmtUsd(h.cost) : "—"}</td>
-                  </tr>
-                ))}
-                <tr className="border-t-[1.5px] border-ink font-bold">
-                  <td className="px-3 py-2">Total</td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums">
-                    {project.hoursByPerson.reduce((s, h) => s + h.hours, 0).toFixed(2)}
-                  </td>
-                  <td className="px-3 py-2" />
-                  <td className="px-3 py-2" />
-                  <td className="px-3 py-2 text-right font-mono tabular-nums">{fmtUsd(project.totalCost)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+        </section>
+      ) : (
+        <HoursCostSection hoursByPerson={project.hoursByPerson} />
+      )}
     </AppShell>
   );
 }

@@ -102,7 +102,7 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
       .order("sequence_order"),
     supabase
       .from("subcontractor_time_entries")
-      .select("subcontractor_id, hours, hourly_rate, subcontractors(name)")
+      .select("subcontractor_id, hours, hourly_rate, paid_at, subcontractors(name)")
       .eq("project_id", id),
     supabase
       .from("project_subcontractors")
@@ -129,19 +129,40 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
   // change never retroactively re-costs hours already logged. If a person's
   // rate changed mid-project, `rate` below reflects that by showing null
   // (varies) rather than picking one arbitrarily.
-  const hoursBySub = new Map<string, { name: string; hours: number; cost: number; hasUnknownRate: boolean; rates: Set<number> }>();
+  const hoursBySub = new Map<
+    string,
+    { name: string; hours: number; cost: number; hasUnknownRate: boolean; rates: Set<number>; paidHours: number; paidCost: number; pendingHours: number; pendingCost: number }
+  >();
   for (const e of timeEntriesRes.data ?? []) {
     const sub = Array.isArray(e.subcontractors) ? e.subcontractors[0] : e.subcontractors;
     const name = sub?.name ?? "Unknown";
     if (!hoursBySub.has(e.subcontractor_id)) {
-      hoursBySub.set(e.subcontractor_id, { name, hours: 0, cost: 0, hasUnknownRate: false, rates: new Set() });
+      hoursBySub.set(e.subcontractor_id, {
+        name,
+        hours: 0,
+        cost: 0,
+        hasUnknownRate: false,
+        rates: new Set(),
+        paidHours: 0,
+        paidCost: 0,
+        pendingHours: 0,
+        pendingCost: 0,
+      });
     }
     const entry = hoursBySub.get(e.subcontractor_id)!;
     entry.hours += e.hours;
-    if (e.hourly_rate === null) entry.hasUnknownRate = true;
+    const cost = e.hourly_rate === null ? null : e.hours * e.hourly_rate;
+    if (cost === null) entry.hasUnknownRate = true;
     else {
-      entry.cost += e.hours * e.hourly_rate;
-      entry.rates.add(e.hourly_rate);
+      entry.cost += cost;
+      entry.rates.add(e.hourly_rate!);
+    }
+    if (e.paid_at !== null) {
+      entry.paidHours += e.hours;
+      if (cost !== null) entry.paidCost += cost;
+    } else {
+      entry.pendingHours += e.hours;
+      if (cost !== null) entry.pendingCost += cost;
     }
   }
 
@@ -157,6 +178,10 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
       rate: v.rates.size === 1 ? v.rates.values().next().value ?? null : null,
       allocatedHours: allocatedBySub.get(subcontractorId) ?? null,
       cost: v.hasUnknownRate && v.rates.size === 0 ? null : v.cost,
+      paidHours: v.paidHours,
+      paidCost: v.paidCost,
+      pendingHours: v.pendingHours,
+      pendingCost: v.pendingCost,
     };
   });
   hoursByPerson.sort((a, b) => b.hours - a.hours);

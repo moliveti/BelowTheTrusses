@@ -39,7 +39,7 @@ export const TABS: { key: Tab; label: string; description: string; Icon: (props:
   { key: "today", label: "Priorities", description: "What needs attention today", Icon: PriorityIcon },
   { key: "leads", label: "Quotes & Leads", description: "Intake, follow-up, and quote building", Icon: LeadsIcon },
   { key: "referrals", label: "Referral Sources", description: "Revenue by referral relationship", Icon: ReferralIcon },
-  { key: "contracted", label: "Contracted Work", description: "Subcontractor hours and cost", Icon: ContractedIcon },
+  { key: "contracted", label: "Hourly Cost of Contracted Work", description: "Subcontractor hours, cost, and billing status", Icon: ContractedIcon },
   { key: "productivity", label: "Productivity", description: "Hours logged by person", Icon: ProductivityIcon },
   { key: "projects", label: "Projects", description: "All projects and billing status", Icon: ProjectsIcon },
   { key: "sow", label: "Business Not Materialized", description: "Proposals that didn't convert", Icon: SowIcon },
@@ -84,7 +84,8 @@ export function AppSidebar({
   // detail has none of these highlighted, even though the nav is present.
   const activeTab: Tab | null = pathname === "/" ? ((searchParams.get("tab") as Tab | null) ?? "financial") : null;
 
-  const visibleTabs = TABS.filter((t) => t.key !== "team" || role === "owner");
+  const OWNER_ONLY_TABS: Tab[] = ["team", "contracted"];
+  const visibleTabs = TABS.filter((t) => !OWNER_ONLY_TABS.includes(t.key) || role === "owner");
   const width = expanded ? SIDEBAR_WIDTH_CLASS.expanded : SIDEBAR_WIDTH_CLASS.collapsed;
 
   function goTo(key: Tab) {

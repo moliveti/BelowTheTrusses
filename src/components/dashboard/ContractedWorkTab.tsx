@@ -9,6 +9,99 @@ import { effectiveRate } from "@/lib/hours/rates";
 import { fmtUsd } from "@/lib/dashboard/format";
 import { RateSettings } from "./RateSettings";
 
+type StatusFilter = "all" | "pending" | "paid";
+
+function isPaid(e: TimeEntry): boolean {
+  return e.paidAt !== null;
+}
+
+function matchesStatus(e: TimeEntry, status: StatusFilter): boolean {
+  return status === "all" || (status === "paid") === isPaid(e);
+}
+
+interface Split {
+  hours: number;
+  cost: number;
+  paidHours: number;
+  paidCost: number;
+  pendingHours: number;
+  pendingCost: number;
+  hasUnknownRate: boolean;
+  pendingEntryIds: string[];
+}
+
+function emptySplit(): Split {
+  return { hours: 0, cost: 0, paidHours: 0, paidCost: 0, pendingHours: 0, pendingCost: 0, hasUnknownRate: false, pendingEntryIds: [] };
+}
+
+function accumulate(split: Split, e: TimeEntry) {
+  split.hours += e.hours;
+  const cost = e.hourlyRate === null ? null : e.hours * e.hourlyRate;
+  if (cost === null) split.hasUnknownRate = true;
+  else split.cost += cost;
+  if (isPaid(e)) {
+    split.paidHours += e.hours;
+    if (cost !== null) split.paidCost += cost;
+  } else {
+    split.pendingHours += e.hours;
+    if (cost !== null) split.pendingCost += cost;
+    split.pendingEntryIds.push(e.id);
+  }
+}
+
+interface SubcontractorBreakdown extends Split {
+  subcontractorId: string;
+  subcontractorName: string;
+  byProject: (Split & { projectId: string; projectName: string })[];
+}
+
+function buildSubcontractorBreakdowns(entries: TimeEntry[]): SubcontractorBreakdown[] {
+  const bySub = new Map<string, SubcontractorBreakdown>();
+  for (const e of entries) {
+    if (!bySub.has(e.subcontractorId)) {
+      bySub.set(e.subcontractorId, {
+        ...emptySplit(),
+        subcontractorId: e.subcontractorId,
+        subcontractorName: e.subcontractorName,
+        byProject: [],
+      });
+    }
+    const sub = bySub.get(e.subcontractorId)!;
+    accumulate(sub, e);
+    let proj = sub.byProject.find((p) => p.projectId === e.projectId);
+    if (!proj) {
+      proj = { ...emptySplit(), projectId: e.projectId, projectName: e.projectName };
+      sub.byProject.push(proj);
+    }
+    accumulate(proj, e);
+  }
+  return Array.from(bySub.values()).sort((a, b) => b.cost - a.cost);
+}
+
+interface ProjectBreakdown extends Split {
+  projectId: string;
+  projectName: string;
+  byContractor: (Split & { subcontractorId: string; subcontractorName: string })[];
+}
+
+function buildProjectBreakdowns(entries: TimeEntry[]): ProjectBreakdown[] {
+  const byProj = new Map<string, ProjectBreakdown>();
+  for (const e of entries) {
+    if (!byProj.has(e.projectId)) {
+      byProj.set(e.projectId, { ...emptySplit(), projectId: e.projectId, projectName: e.projectName, byContractor: [] });
+    }
+    const proj = byProj.get(e.projectId)!;
+    accumulate(proj, e);
+    let sub = proj.byContractor.find((s) => s.subcontractorId === e.subcontractorId);
+    if (!sub) {
+      sub = { ...emptySplit(), subcontractorId: e.subcontractorId, subcontractorName: e.subcontractorName };
+      proj.byContractor.push(sub);
+    }
+    accumulate(sub, e);
+  }
+  return Array.from(byProj.values()).sort((a, b) => b.cost - a.cost);
+}
+
 export function ContractedWorkTab({
   entries: initialEntries,
   subcontractors: initialSubcontractors,
@@ -28,7 +121,10 @@ export function ContractedWorkTab({
   const [rates, setRates] = useState(initialRates);
   const [subFilter, setSubFilter] = useState<string>("all");
   const [projFilter, setProjFilter] = useState<string>("all");
-  const [subTab, setSubTab] = useState<"overview" | "time" | "assignments">("overview");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [subTab, setSubTab] = useState<"overview" | "time" | "rates" | "assignments">("overview");
+  const [expandedSubId, setExpandedSubId] = useState<string | null>(null);
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
 
   function handleSubcontractorAdded(sub: SubcontractorRates) {
     setSubcontractors((prev) => [...prev, { id: sub.id, name: sub.name }].sort((a, b) => a.name.localeCompare(b.name)));
@@ -38,20 +134,35 @@ export function ContractedWorkTab({
   const weekStartIso = toIsoDate(startOfWeek(new Date()));
   const weekEndIso = toIsoDate(endOfWeek(new Date()));
 
+  // Shared by both Overview and Time Input -- one filter bar drives
+  // everything, per the ask to be able to filter all of it by billing status.
   const filtered = useMemo(
     () =>
       entries.filter(
         (e) =>
           (subFilter === "all" || e.subcontractorId === subFilter) &&
-          (projFilter === "all" || e.projectId === projFilter)
+          (projFilter === "all" || e.projectId === projFilter) &&
+          matchesStatus(e, statusFilter)
       ),
-    [entries, subFilter, projFilter]
+    [entries, subFilter, projFilter, statusFilter]
   );
 
   const thisWeek = filtered.filter((e) => e.workDate >= weekStartIso && e.workDate <= weekEndIso);
   const weekBySubcontractor = groupHourTotals(thisWeek, (e) => e.subcontractorName);
 
-  const costRows = useMemo(() => buildCostRows(entries, assignments), [entries, assignments]);
+  const costRows = useMemo(() => buildCostRows(filtered, assignments), [filtered, assignments]);
+  const subBreakdowns = useMemo(() => buildSubcontractorBreakdowns(filtered), [filtered]);
+  const projBreakdowns = useMemo(() => buildProjectBreakdowns(filtered), [filtered]);
+
+  async function markPaid(entryIds: string[]) {
+    if (entryIds.length === 0) return;
+    const supabase = createClient();
+    const today = toIsoDate(new Date());
+    const { error } = await supabase.from("subcontractor_time_entries").update({ paid_at: today }).in("id", entryIds);
+    if (!error) {
+      setEntries((prev) => prev.map((e) => (entryIds.includes(e.id) ? { ...e, paidAt: today } : e)));
+    }
+  }
 
   async function deleteEntry(id: string) {
     const supabase = createClient();
@@ -62,18 +173,21 @@ export function ContractedWorkTab({
   // "assignments" sub-tab is hidden for now (not currently useful) but the
   // tab/content logic below is left in place in case it's wanted again.
   const SUB_TABS: { key: typeof subTab; label: string }[] = [
-    { key: "overview", label: "Contracted Work" },
-    { key: "time", label: "Subcontractor Time Input" },
+    { key: "overview", label: "Overview" },
+    { key: "time", label: "Time Input" },
+    { key: "rates", label: "Contractor Hourly Rate Setup" },
   ];
+
+  const pendingCount = filtered.filter((e) => !isPaid(e)).length;
 
   return (
     <div>
       <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
-        <h2 className="text-lg font-normal">Contracted Work</h2>
+        <h2 className="text-lg font-normal">Hourly Cost of Contracted Work</h2>
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Hours &amp; Invoicing</span>
       </div>
 
-      <div className="mb-8 flex flex-wrap gap-1 border-b border-line">
+      <div className="mb-4 flex flex-wrap gap-1 border-b border-line">
         {SUB_TABS.map((t) => (
           <button
             key={t.key}
@@ -86,6 +200,52 @@ export function ContractedWorkTab({
           </button>
         ))}
       </div>
+
+      {(subTab === "overview" || subTab === "time") && (
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <select
+            value={subFilter}
+            onChange={(e) => setSubFilter(e.target.value)}
+            className="border border-line px-2 py-1 text-xs"
+          >
+            <option value="all">All subcontractors</option>
+            {subcontractors.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={projFilter}
+            onChange={(e) => setProjFilter(e.target.value)}
+            className="border border-line px-2 py-1 text-xs"
+          >
+            <option value="all">All projects</option>
+            {activeProjects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="border border-line px-2 py-1 text-xs"
+          >
+            <option value="all">All billing status</option>
+            <option value="pending">Pending</option>
+            <option value="paid">Paid</option>
+          </select>
+          {pendingCount > 0 && (
+            <button
+              onClick={() => markPaid(filtered.filter((e) => !isPaid(e)).map((e) => e.id))}
+              className="border border-ink px-3 py-1 font-mono text-[10.5px] uppercase text-ink hover:bg-canvas"
+            >
+              Mark {pendingCount} Filtered {pendingCount === 1 ? "Entry" : "Entries"} Paid
+            </button>
+          )}
+        </div>
+      )}
 
       {subTab === "overview" && (
         <>
@@ -106,14 +266,22 @@ export function ContractedWorkTab({
           </section>
 
           <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <CostBySubcontractor rows={costRows} />
-            <CostByProject rows={costRows} />
+            <CostBySubcontractor
+              rows={subBreakdowns}
+              expandedId={expandedSubId}
+              onToggle={(id) => setExpandedSubId((prev) => (prev === id ? null : id))}
+              onMarkPaid={markPaid}
+            />
+            <CostByProject
+              rows={projBreakdowns}
+              expandedId={expandedProjectId}
+              onToggle={(id) => setExpandedProjectId((prev) => (prev === id ? null : id))}
+              onMarkPaid={markPaid}
+            />
           </section>
-
-          <section>
-            <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Default Hourly Rates</h3>
-            <RateSettings initialRates={rates} onSubcontractorAdded={handleSubcontractorAdded} />
-          </section>
+          {costRows.length === 0 && filtered.length === 0 && (
+            <p className="text-sm text-ink/50">No hours match the current filters.</p>
+          )}
         </>
       )}
 
@@ -129,36 +297,17 @@ export function ContractedWorkTab({
           </section>
 
           <section>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <h3 className="mr-2 font-mono text-xs uppercase tracking-wide text-ink/60">All Entries</h3>
-              <select
-                value={subFilter}
-                onChange={(e) => setSubFilter(e.target.value)}
-                className="border border-line px-2 py-1 text-xs"
-              >
-                <option value="all">All subcontractors</option>
-                {subcontractors.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={projFilter}
-                onChange={(e) => setProjFilter(e.target.value)}
-                className="border border-line px-2 py-1 text-xs"
-              >
-                <option value="all">All projects</option>
-                {activeProjects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <EntriesTable entries={filtered} onDelete={deleteEntry} />
+            <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">All Entries</h3>
+            <EntriesTable entries={filtered} onDelete={deleteEntry} onMarkPaid={(id) => markPaid([id])} />
           </section>
         </>
+      )}
+
+      {subTab === "rates" && (
+        <section>
+          <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Contractor Hourly Rate Setup</h3>
+          <RateSettings initialRates={rates} onSubcontractorAdded={handleSubcontractorAdded} />
+        </section>
       )}
 
       {subTab === "assignments" && (
@@ -188,20 +337,29 @@ function groupHourTotals(entries: TimeEntry[], keyFn: (e: TimeEntry) => string) 
     .sort((a, b) => b.total - a.total);
 }
 
-function CostBySubcontractor({ rows }: { rows: ReturnType<typeof buildCostRows> }) {
-  const bySub = new Map<string, { name: string; hours: number; allocated: number; cost: number; hasUnknownRate: boolean }>();
-  for (const r of rows) {
-    if (!bySub.has(r.subcontractorId)) {
-      bySub.set(r.subcontractorId, { name: r.subcontractorName, hours: 0, allocated: 0, cost: 0, hasUnknownRate: false });
-    }
-    const entry = bySub.get(r.subcontractorId)!;
-    entry.hours += r.hours;
-    entry.allocated += r.allocatedHours ?? 0;
-    if (r.hasUnknownRate) entry.hasUnknownRate = true;
-    entry.cost += r.cost ?? 0;
-  }
-  const list = Array.from(bySub.values()).sort((a, b) => b.cost - a.cost);
+function StatusBadge({ paid }: { paid: boolean }) {
+  return (
+    <span
+      className={`border px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wide ${
+        paid ? "border-positive text-positive" : "border-ink/30 text-ink/60"
+      }`}
+    >
+      {paid ? "Paid" : "Pending"}
+    </span>
+  );
+}
 
+function CostBySubcontractor({
+  rows,
+  expandedId,
+  onToggle,
+  onMarkPaid,
+}: {
+  rows: SubcontractorBreakdown[];
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  onMarkPaid: (entryIds: string[]) => void;
+}) {
   return (
     <div>
       <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Cost by Subcontractor</h3>
@@ -211,28 +369,97 @@ function CostBySubcontractor({ rows }: { rows: ReturnType<typeof buildCostRows> 
             <tr className="border-b-2 border-ink">
               <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Name</th>
               <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Hours</th>
-              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Allocated</th>
+              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Paid</th>
+              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Pending</th>
               <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Cost</th>
             </tr>
           </thead>
           <tbody>
-            {list.length === 0 ? (
+            {rows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-3 py-4 text-center text-sm text-ink/50">
-                  No hours logged yet.
+                <td colSpan={5} className="px-3 py-4 text-center text-sm text-ink/50">
+                  No hours match the current filters.
                 </td>
               </tr>
             ) : (
-              list.map((r) => (
-                <tr key={r.name} className="border-b border-line hover:bg-canvas">
-                  <td className="px-3 py-2">{r.name}</td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums">{r.hours.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums">{r.allocated ? r.allocated.toFixed(1) : "—"}</td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums">
-                    {fmtUsd(r.cost)}
-                    {r.hasUnknownRate && <span className="ml-1 text-warning">*</span>}
-                  </td>
-                </tr>
+              rows.map((r) => (
+                <>
+                  <tr
+                    key={r.subcontractorId}
+                    onClick={() => onToggle(r.subcontractorId)}
+                    className="cursor-pointer border-b border-line hover:bg-canvas"
+                  >
+                    <td className="px-3 py-2">
+                      <span className="mr-1.5 inline-block w-3 text-[10px] text-ink/40">
+                        {expandedId === r.subcontractorId ? "▼" : "▶"}
+                      </span>
+                      {r.subcontractorName}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{r.hours.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-positive">{fmtUsd(r.paidCost)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{fmtUsd(r.pendingCost)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">
+                      {fmtUsd(r.cost)}
+                      {r.hasUnknownRate && <span className="ml-1 text-warning">*</span>}
+                    </td>
+                  </tr>
+                  {expandedId === r.subcontractorId && (
+                    <tr key={`${r.subcontractorId}-detail`} className="border-b border-line bg-canvas">
+                      <td colSpan={5} className="p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="font-mono text-[10px] uppercase tracking-wide text-ink/50">By Project</span>
+                          {r.pendingEntryIds.length > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMarkPaid(r.pendingEntryIds);
+                              }}
+                              className="font-mono text-[10.5px] uppercase text-positive underline underline-offset-2"
+                            >
+                              Mark All Pending Paid
+                            </button>
+                          )}
+                        </div>
+                        <table className="w-full border-collapse text-xs">
+                          <thead>
+                            <tr className="border-b border-line">
+                              <th className="px-2 py-1 text-left font-mono text-[9.5px] uppercase text-ink/40">Project</th>
+                              <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Hours</th>
+                              <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Paid $</th>
+                              <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Pending $</th>
+                              <th className="px-2 py-1" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {r.byProject
+                              .sort((a, b) => b.cost - a.cost)
+                              .map((p) => (
+                                <tr key={p.projectId} className="border-b border-line last:border-b-0">
+                                  <td className="px-2 py-1">{p.projectName}</td>
+                                  <td className="px-2 py-1 text-right font-mono tabular-nums">{p.hours.toFixed(2)}</td>
+                                  <td className="px-2 py-1 text-right font-mono tabular-nums text-positive">{fmtUsd(p.paidCost)}</td>
+                                  <td className="px-2 py-1 text-right font-mono tabular-nums">{fmtUsd(p.pendingCost)}</td>
+                                  <td className="px-2 py-1 text-right">
+                                    {p.pendingEntryIds.length > 0 && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onMarkPaid(p.pendingEntryIds);
+                                        }}
+                                        className="font-mono text-[9.5px] uppercase text-positive underline underline-offset-2"
+                                      >
+                                        Mark Paid
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))
             )}
           </tbody>
@@ -243,19 +470,17 @@ function CostBySubcontractor({ rows }: { rows: ReturnType<typeof buildCostRows> 
   );
 }
 
-function CostByProject({ rows }: { rows: ReturnType<typeof buildCostRows> }) {
-  const byProject = new Map<string, { name: string; hours: number; cost: number; hasUnknownRate: boolean }>();
-  for (const r of rows) {
-    if (!byProject.has(r.projectId)) {
-      byProject.set(r.projectId, { name: r.projectName, hours: 0, cost: 0, hasUnknownRate: false });
-    }
-    const entry = byProject.get(r.projectId)!;
-    entry.hours += r.hours;
-    if (r.hasUnknownRate) entry.hasUnknownRate = true;
-    entry.cost += r.cost ?? 0;
-  }
-  const list = Array.from(byProject.values()).sort((a, b) => b.cost - a.cost);
-
+function CostByProject({
+  rows,
+  expandedId,
+  onToggle,
+  onMarkPaid,
+}: {
+  rows: ProjectBreakdown[];
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  onMarkPaid: (entryIds: string[]) => void;
+}) {
   return (
     <div>
       <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Cost by Project</h3>
@@ -265,26 +490,97 @@ function CostByProject({ rows }: { rows: ReturnType<typeof buildCostRows> }) {
             <tr className="border-b-2 border-ink">
               <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Project</th>
               <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Hours</th>
+              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Paid</th>
+              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Pending</th>
               <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Cost</th>
             </tr>
           </thead>
           <tbody>
-            {list.length === 0 ? (
+            {rows.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-3 py-4 text-center text-sm text-ink/50">
-                  No hours logged yet.
+                <td colSpan={5} className="px-3 py-4 text-center text-sm text-ink/50">
+                  No hours match the current filters.
                 </td>
               </tr>
             ) : (
-              list.map((r) => (
-                <tr key={r.name} className="border-b border-line hover:bg-canvas">
-                  <td className="px-3 py-2">{r.name}</td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums">{r.hours.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums">
-                    {fmtUsd(r.cost)}
-                    {r.hasUnknownRate && <span className="ml-1 text-warning">*</span>}
-                  </td>
-                </tr>
+              rows.map((r) => (
+                <>
+                  <tr
+                    key={r.projectId}
+                    onClick={() => onToggle(r.projectId)}
+                    className="cursor-pointer border-b border-line hover:bg-canvas"
+                  >
+                    <td className="px-3 py-2">
+                      <span className="mr-1.5 inline-block w-3 text-[10px] text-ink/40">
+                        {expandedId === r.projectId ? "▼" : "▶"}
+                      </span>
+                      {r.projectName}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{r.hours.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-positive">{fmtUsd(r.paidCost)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{fmtUsd(r.pendingCost)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">
+                      {fmtUsd(r.cost)}
+                      {r.hasUnknownRate && <span className="ml-1 text-warning">*</span>}
+                    </td>
+                  </tr>
+                  {expandedId === r.projectId && (
+                    <tr key={`${r.projectId}-detail`} className="border-b border-line bg-canvas">
+                      <td colSpan={5} className="p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="font-mono text-[10px] uppercase tracking-wide text-ink/50">By Contractor</span>
+                          {r.pendingEntryIds.length > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMarkPaid(r.pendingEntryIds);
+                              }}
+                              className="font-mono text-[10.5px] uppercase text-positive underline underline-offset-2"
+                            >
+                              Mark All Pending Paid
+                            </button>
+                          )}
+                        </div>
+                        <table className="w-full border-collapse text-xs">
+                          <thead>
+                            <tr className="border-b border-line">
+                              <th className="px-2 py-1 text-left font-mono text-[9.5px] uppercase text-ink/40">Contractor</th>
+                              <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Hours</th>
+                              <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Paid $</th>
+                              <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Pending $</th>
+                              <th className="px-2 py-1" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {r.byContractor
+                              .sort((a, b) => b.cost - a.cost)
+                              .map((s) => (
+                                <tr key={s.subcontractorId} className="border-b border-line last:border-b-0">
+                                  <td className="px-2 py-1">{s.subcontractorName}</td>
+                                  <td className="px-2 py-1 text-right font-mono tabular-nums">{s.hours.toFixed(2)}</td>
+                                  <td className="px-2 py-1 text-right font-mono tabular-nums text-positive">{fmtUsd(s.paidCost)}</td>
+                                  <td className="px-2 py-1 text-right font-mono tabular-nums">{fmtUsd(s.pendingCost)}</td>
+                                  <td className="px-2 py-1 text-right">
+                                    {s.pendingEntryIds.length > 0 && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onMarkPaid(s.pendingEntryIds);
+                                        }}
+                                        className="font-mono text-[9.5px] uppercase text-positive underline underline-offset-2"
+                                      >
+                                        Mark Paid
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))
             )}
           </tbody>
@@ -440,7 +736,15 @@ function ManualEntryForm({
   );
 }
 
-function EntriesTable({ entries, onDelete }: { entries: TimeEntry[]; onDelete: (id: string) => void }) {
+function EntriesTable({
+  entries,
+  onDelete,
+  onMarkPaid,
+}: {
+  entries: TimeEntry[];
+  onDelete: (id: string) => void;
+  onMarkPaid: (id: string) => void;
+}) {
   const total = entries.reduce((s, e) => s + e.hours, 0);
 
   if (entries.length === 0) {
@@ -449,7 +753,7 @@ function EntriesTable({ entries, onDelete }: { entries: TimeEntry[]; onDelete: (
 
   return (
     <div className="overflow-x-auto border border-line bg-surface">
-      <table className="w-full min-w-[720px] border-collapse text-[13px]">
+      <table className="w-full min-w-[860px] border-collapse text-[13px]">
         <thead>
           <tr className="border-b-2 border-ink">
             <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Date</th>
@@ -457,6 +761,7 @@ function EntriesTable({ entries, onDelete }: { entries: TimeEntry[]; onDelete: (
             <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Project</th>
             <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Hours</th>
             <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Description</th>
+            <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Status</th>
             <th className="px-3 py-2" />
           </tr>
         </thead>
@@ -468,13 +773,27 @@ function EntriesTable({ entries, onDelete }: { entries: TimeEntry[]; onDelete: (
               <td className="px-3 py-2">{e.projectName}</td>
               <td className="px-3 py-2 text-right font-mono tabular-nums">{e.hours.toFixed(2)}</td>
               <td className="px-3 py-2">{e.workDescription}</td>
+              <td className="px-3 py-2">
+                <StatusBadge paid={e.paidAt !== null} />
+                {e.paidAt && <div className="mt-0.5 font-mono text-[9.5px] text-ink/40">{fmtShortDate(e.paidAt)}</div>}
+              </td>
               <td className="px-3 py-2 text-right">
-                <button
-                  onClick={() => onDelete(e.id)}
-                  className="font-mono text-[11px] text-warning underline underline-offset-2"
-                >
-                  Delete
-                </button>
+                <div className="flex items-center justify-end gap-2">
+                  {e.paidAt === null && (
+                    <button
+                      onClick={() => onMarkPaid(e.id)}
+                      className="font-mono text-[11px] text-positive underline underline-offset-2"
+                    >
+                      Mark Paid
+                    </button>
+                  )}
+                  <button
+                    onClick={() => onDelete(e.id)}
+                    className="font-mono text-[11px] text-warning underline underline-offset-2"
+                  >
+                    Delete
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
@@ -483,7 +802,7 @@ function EntriesTable({ entries, onDelete }: { entries: TimeEntry[]; onDelete: (
               Total
             </td>
             <td className="px-3 py-2 text-right font-mono tabular-nums">{total.toFixed(2)}</td>
-            <td className="px-3 py-2" colSpan={2} />
+            <td className="px-3 py-2" colSpan={3} />
           </tr>
         </tbody>
       </table>
