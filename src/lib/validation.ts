@@ -8,3 +8,18 @@ const BUDGET_RANGE_PATTERN = new RegExp(`^\\s*${AMOUNT.source}\\s*((-|–|to)\\s
 export function isValidBudgetRange(value: string): boolean {
   return value.trim() === "" || BUDGET_RANGE_PATTERN.test(value);
 }
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function isValidEmail(value: string): boolean {
+  return value.trim() === "" || EMAIL_PATTERN.test(value.trim());
+}
+
+// Digits plus common separators (space, dash, dot, parens, leading +) --
+// rejects letters and other junk while still accepting extensions like
+// "555-123-4567 x204".
+const PHONE_PATTERN = /^\+?[\d\s().-]{7,25}$/;
+
+export function isValidPhone(value: string): boolean {
+  return value.trim() === "" || PHONE_PATTERN.test(value.trim());
+}

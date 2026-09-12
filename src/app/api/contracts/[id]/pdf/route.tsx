@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import { getMyRole } from "@/lib/profile";
 import { canBuildQuotes } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -9,12 +9,14 @@ import {
   buildCommercialContract,
   type ContractDocument,
 } from "@/lib/contracts/schedules";
+import { getLogoBuffer } from "@/lib/pdf/logo";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", lineHeight: 1.4 },
+  logo: { width: 130, marginBottom: 14 },
   title: { fontSize: 16, marginBottom: 4 },
   subtitle: { fontSize: 10, color: "#666", marginBottom: 20 },
   scheduleTitle: { fontSize: 13, marginBottom: 10, textTransform: "uppercase" },
@@ -28,10 +30,23 @@ function fmtUsd(n: number): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
-function ContractPdf({ clientName, projectName, doc, initialPaymentLine }: { clientName: string; projectName: string; doc: ContractDocument; initialPaymentLine: string }) {
+function ContractPdf({
+  logo,
+  clientName,
+  projectName,
+  doc,
+  initialPaymentLine,
+}: {
+  logo: Buffer;
+  clientName: string;
+  projectName: string;
+  doc: ContractDocument;
+  initialPaymentLine: string;
+}) {
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
+        <Image src={logo} style={styles.logo} />
         <Text style={styles.title}>Below the Trusses — Design Services Agreement</Text>
         <Text style={styles.subtitle}>
           {clientName} · {projectName}
@@ -166,7 +181,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     : "We ask that you confirm the foregoing by signing and returning a copy of this letter.";
 
   const buffer = await renderToBuffer(
-    <ContractPdf clientName={clientName} projectName={project.name} doc={doc} initialPaymentLine={initialPaymentLine} />
+    <ContractPdf logo={getLogoBuffer()} clientName={clientName} projectName={project.name} doc={doc} initialPaymentLine={initialPaymentLine} />
   );
 
   const storagePath = `contracts/${id}.pdf`;

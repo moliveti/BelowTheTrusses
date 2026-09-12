@@ -18,6 +18,22 @@ export async function getSelectionCatalog(): Promise<SelectionCatalogItem[]> {
   }));
 }
 
+/** Most recent quote id per lead, so the Leads table can show a persistent Download PDF link on every row that already has one -- not just right after creating it in the current session. */
+export async function getLatestQuoteIdsByLead(): Promise<Record<string, string>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("id, lead_id, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`quotes: ${error.message}`);
+
+  const byLead: Record<string, string> = {};
+  for (const row of data ?? []) {
+    if (!(row.lead_id in byLead)) byLead[row.lead_id] = row.id;
+  }
+  return byLead;
+}
+
 /** Most recent quote for a project (a project may only ever have one today, but "most recent" keeps this safe if a quote is ever regenerated). */
 export async function getQuoteForProject(projectId: string): Promise<Quote | null> {
   const supabase = await createClient();

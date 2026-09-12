@@ -11,12 +11,73 @@ const TYPE_CLASS: Record<string, string> = {
   Furniture: "text-brand-accent",
 };
 
+type BillingStatus = "Active" | "Inactive" | "Closed";
+const ALL_STATUSES: BillingStatus[] = ["Active", "Inactive", "Closed"];
+const ALL_TYPES = ["Residential", "Commercial", "Furniture"];
+
+// Mirrors the Active/Inactive/Closed label logic already rendered per row,
+// pulled out so the filter and the badge can never disagree.
+function billingStatus(p: ProjectListItem): BillingStatus {
+  if (p.active) return "Active";
+  if (p.plannedRevenue !== null && p.amountPaid >= p.plannedRevenue) return "Closed";
+  return "Inactive";
+}
+
+function PillToggle<T extends string>({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: T[];
+  selected: Set<T>;
+  onToggle: (value: T) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {options.map((opt) => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => onToggle(opt)}
+          className={`px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide ${
+            selected.has(opt) ? "bg-brand-primary text-white" : "border border-ink text-ink hover:bg-canvas"
+          }`}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ProjectsIndex({ projects }: { projects: ProjectListItem[] }) {
   const [search, setSearch] = useState("");
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<BillingStatus>>(new Set(ALL_STATUSES));
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set(ALL_TYPES));
+
+  function toggleStatus(status: BillingStatus) {
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  }
+
+  function toggleType(type: string) {
+    setSelectedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }
+
   const filtered = projects.filter(
     (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.clientName.toLowerCase().includes(search.toLowerCase())
+      (p.name.toLowerCase().includes(search.toLowerCase()) || p.clientName.toLowerCase().includes(search.toLowerCase())) &&
+      selectedTypes.has(p.type) &&
+      selectedStatuses.has(billingStatus(p))
   );
 
   return (
@@ -33,6 +94,17 @@ export function ProjectsIndex({ projects }: { projects: ProjectListItem[] }) {
         onChange={(e) => setSearch(e.target.value)}
         className="mb-4 w-full max-w-sm border border-line px-3 py-2 text-sm outline-none focus:border-brand-primary"
       />
+
+      <div className="mb-4 flex flex-wrap gap-x-8 gap-y-3">
+        <div>
+          <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink/50">Status</div>
+          <PillToggle options={ALL_STATUSES} selected={selectedStatuses} onToggle={toggleStatus} />
+        </div>
+        <div>
+          <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink/50">Type</div>
+          <PillToggle options={ALL_TYPES} selected={selectedTypes} onToggle={toggleType} />
+        </div>
+      </div>
       <div className="overflow-x-auto border border-line bg-surface">
         <table className="w-full min-w-[640px] border-collapse text-[13px]">
           <thead>
@@ -73,12 +145,10 @@ export function ProjectsIndex({ projects }: { projects: ProjectListItem[] }) {
                   <td className="px-3 py-2.5 text-left">
                     <div className={`font-mono text-[11px] ${TYPE_CLASS[p.type] ?? ""}`}>{p.type}</div>
                     <div className="font-mono text-[10px] uppercase">
-                      {p.active ? (
+                      {billingStatus(p) === "Active" ? (
                         <span className="text-positive">Active</span>
                       ) : (
-                        <span className="text-ink/40">
-                          {p.plannedRevenue !== null && p.amountPaid >= p.plannedRevenue ? "Closed" : "Inactive"}
-                        </span>
+                        <span className="text-ink/40">{billingStatus(p)}</span>
                       )}
                     </div>
                   </td>

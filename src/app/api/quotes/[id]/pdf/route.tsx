@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
-import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import { getMyRole } from "@/lib/profile";
 import { canBuildQuotes } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getLogoBuffer } from "@/lib/pdf/logo";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, fontFamily: "Helvetica" },
+  logo: { width: 130, marginBottom: 14 },
   title: { fontSize: 16, marginBottom: 4 },
   subtitle: { fontSize: 10, color: "#666", marginBottom: 20 },
   sectionHeader: { fontSize: 9, textTransform: "uppercase", color: "#888", marginTop: 14, marginBottom: 4 },
@@ -28,6 +30,7 @@ function fmtUsd(n: number): string {
 }
 
 interface QuotePdfProps {
+  logo: Buffer;
   leadName: string;
   projectType: string;
   createdAt: string;
@@ -45,6 +48,7 @@ function QuotePdf(props: QuotePdfProps) {
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
+        <Image src={props.logo} style={styles.logo} />
         <Text style={styles.title}>Below the Trusses — Quote</Text>
         <Text style={styles.subtitle}>
           {props.leadName} · {props.projectType} · {new Date(props.createdAt).toLocaleDateString()}
@@ -122,6 +126,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const buffer = await renderToBuffer(
     <QuotePdf
+      logo={getLogoBuffer()}
       leadName={lead?.name ?? "Client"}
       projectType={quote.project_type}
       createdAt={quote.created_at}

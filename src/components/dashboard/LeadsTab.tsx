@@ -10,7 +10,7 @@ import { SCOPE_CATEGORIES } from "@/lib/scope";
 import type { SelectionCatalogItem } from "@/lib/quotes/types";
 import type { Role } from "@/lib/profile";
 import { canBuildQuotes } from "@/lib/permissions";
-import { isValidBudgetRange } from "@/lib/validation";
+import { isValidBudgetRange, isValidEmail, isValidPhone } from "@/lib/validation";
 import { ProjectKickoffPanel } from "./ProjectKickoffPanel";
 import { QuoteBuilderPanel } from "./QuoteBuilderPanel";
 
@@ -70,12 +70,14 @@ export function LeadsTab({
   referralSources: initialReferralSources,
   milestoneTemplates,
   selectionCatalog,
+  quotesByLeadId: initialQuotesByLeadId,
   role,
 }: {
   leads: Lead[];
   referralSources: ReferralSource[];
   milestoneTemplates: MilestoneTemplateGroup[];
   selectionCatalog: SelectionCatalogItem[];
+  quotesByLeadId: Record<string, string>;
   role: Role | null;
 }) {
   const [leads, setLeads] = useState(initialLeads);
@@ -89,7 +91,11 @@ export function LeadsTab({
   // it with no lead yet (e.g. a client calling in directly) -- the builder
   // itself creates the lead as part of submitting.
   const [quoteTarget, setQuoteTarget] = useState<Lead | "standalone" | null>(null);
-  const [lastQuoteId, setLastQuoteId] = useState<string | null>(null);
+  // Keyed by lead id so the Download PDF link is available directly on
+  // every row that has a quote -- not just as a one-time toast right after
+  // creating it -- and always points at the current (latest-generated)
+  // revision, since the PDF route itself regenerates from live data.
+  const [quotesByLeadId, setQuotesByLeadId] = useState(initialQuotesByLeadId);
 
   function upsertLead(lead: Lead) {
     setLeads((prev) => [lead, ...prev]);
@@ -250,6 +256,17 @@ export function LeadsTab({
                           <span className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${s.className}`}>
                             {lead.status}
                           </span>
+                          {quotesByLeadId[lead.id] && (
+                            <a
+                              href={`/api/quotes/${quotesByLeadId[lead.id]}/pdf`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="mt-1 block font-mono text-[10px] uppercase text-brand-primary underline underline-offset-2"
+                            >
+                              Download PDF
+                            </a>
+                          )}
                         </td>
                         <td className={`px-3 py-2 font-mono text-xs ${s.label}`}>{days}d ago</td>
                       </tr>
@@ -302,27 +319,10 @@ export function LeadsTab({
             } else {
               upsertLead(resultLead);
             }
-            setLastQuoteId(quoteId);
+            setQuotesByLeadId((prev) => ({ ...prev, [resultLead.id]: quoteId }));
             setQuoteTarget(null);
           }}
         />
-      )}
-
-      {lastQuoteId && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 border border-line bg-surface p-3 text-xs shadow-lg">
-          <span>Quote created.</span>
-          <a
-            href={`/api/quotes/${lastQuoteId}/pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-brand-primary px-3 py-1.5 font-mono text-[10px] uppercase text-white"
-          >
-            Download PDF
-          </a>
-          <button onClick={() => setLastQuoteId(null)} className="text-ink/40 underline underline-offset-2">
-            Dismiss
-          </button>
-        </div>
       )}
     </div>
   );
@@ -540,6 +540,8 @@ function LeadIntakeForm({
     if (!name.trim()) return setError("Name is required.");
     if (isNewSource && !newSourceName.trim()) return setError("Enter a name for the new referral source.");
     if (!isValidBudgetRange(budgetRange)) return setError('Budget should be a dollar amount or range, e.g. "$10k–$20k".');
+    if (!isValidEmail(email)) return setError("Enter a valid email address.");
+    if (!isValidPhone(phone)) return setError("Enter a valid phone number.");
 
     setSaving(true);
     const supabase = createClient();
@@ -774,6 +776,8 @@ function LeadEditPanel({
 }) {
   const [statusError, setStatusError] = useState("");
   const [budgetError, setBudgetError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
 
   async function update(column: string, value: string | string[] | null, patch: Partial<Lead>) {
     const supabase = createClient();
@@ -848,17 +852,35 @@ function LeadEditPanel({
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Email</label>
         <input
           defaultValue={lead.email ?? ""}
-          onBlur={(e) => update("email", e.target.value || null, { email: e.target.value || null })}
+          onBlur={(e) => {
+            if (!isValidEmail(e.target.value)) {
+              setEmailError("Enter a valid email address.");
+              e.target.value = lead.email ?? "";
+              return;
+            }
+            setEmailError("");
+            update("email", e.target.value || null, { email: e.target.value || null });
+          }}
           className="w-full border border-line px-2 py-1.5 text-xs"
         />
+        {emailError && <span className="mt-1 block text-[10px] text-warning">{emailError}</span>}
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Phone</label>
         <input
           defaultValue={lead.phone ?? ""}
-          onBlur={(e) => update("phone", e.target.value || null, { phone: e.target.value || null })}
+          onBlur={(e) => {
+            if (!isValidPhone(e.target.value)) {
+              setPhoneError("Enter a valid phone number.");
+              e.target.value = lead.phone ?? "";
+              return;
+            }
+            setPhoneError("");
+            update("phone", e.target.value || null, { phone: e.target.value || null });
+          }}
           className="w-full border border-line px-2 py-1.5 text-xs"
         />
+        {phoneError && <span className="mt-1 block text-[10px] text-warning">{phoneError}</span>}
       </div>
       <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">State</label>

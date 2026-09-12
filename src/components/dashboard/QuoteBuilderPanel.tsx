@@ -7,7 +7,7 @@ import type { ReferralSource } from "@/lib/dashboard/types";
 import type { SelectionCatalogItem } from "@/lib/quotes/types";
 import { QUOTE_TASK_CATALOG, SCOPE_TO_SELECTION_CATEGORIES } from "@/lib/scope";
 import { toIsoDate } from "@/lib/hours/dates";
-import { isValidBudgetRange } from "@/lib/validation";
+import { isValidBudgetRange, isValidEmail, isValidPhone } from "@/lib/validation";
 import { ScopePills, ReferralSourceSelect } from "./LeadsTab";
 
 const TYPES = ["Residential", "Commercial", "Furniture"] as const;
@@ -24,10 +24,10 @@ function fmtUsd(n: number): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
-/** Categories relevant to the given scope tags, or every category if none of the tags map to anything (safer than hiding items unexpectedly). */
+/** Only the categories whose scope tag is actually selected (e.g. Kitchen/Appliances require "Kitchen Remodel") -- nothing shows until a relevant scope is tagged. */
 function relevantCategories(scopeTags: string[], allCategories: string[]): string[] {
   const mapped = new Set(scopeTags.flatMap((tag) => SCOPE_TO_SELECTION_CATEGORIES[tag] ?? []));
-  return mapped.size > 0 ? allCategories.filter((c) => mapped.has(c)) : allCategories;
+  return allCategories.filter((c) => mapped.has(c));
 }
 
 export function QuoteBuilderPanel({
@@ -116,6 +116,8 @@ export function QuoteBuilderPanel({
     setError("");
     if (!lead && !name.trim()) return setError("Name is required.");
     if (!lead && !isValidBudgetRange(budgetRange)) return setError('Budget should be a dollar amount or range, e.g. "$10k–$20k".');
+    if (!lead && !isValidEmail(email)) return setError("Enter a valid email address.");
+    if (!lead && !isValidPhone(phone)) return setError("Enter a valid phone number.");
 
     setSaving(true);
     const supabase = createClient();
@@ -416,32 +418,38 @@ export function QuoteBuilderPanel({
 
           <div>
             <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-ink/60">
-              Finish Selections{scopeTags.length > 0 && visibleCategories.length < allCategories.length ? " — filtered to the scope tagged above" : ""} — quantity
-              per item, rolls up into one FFE line at {fmtUsd(finishSelectionsRate)}/hr (currently {finishSelectionsHours} hrs = {fmtUsd(finishSelectionsHours * finishSelectionsRate)})
+              Finish Selections — filtered to the scope tagged above — quantity per item, rolls up into one FFE line at{" "}
+              {fmtUsd(finishSelectionsRate)}/hr (currently {finishSelectionsHours} hrs = {fmtUsd(finishSelectionsHours * finishSelectionsRate)})
             </label>
-            <div className="max-h-64 overflow-y-auto border border-line bg-canvas">
-              {visibleCategories.map((cat) => (
-                <div key={cat} className="border-b border-line p-2 last:border-b-0">
-                  <p className="mb-1 font-mono text-[9.5px] uppercase text-ink/40">{cat}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectionCatalog
-                      .filter((item) => item.category === cat)
-                      .map((item) => (
-                        <label key={item.id} className="flex items-center gap-1 text-xs">
-                          <span>{item.itemName}</span>
-                          <input
-                            type="number"
-                            value={selectionQty[item.id] ?? ""}
-                            onChange={(e) => setSelectionQty((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                            placeholder="0"
-                            className="w-12 border border-line px-1 py-0.5 text-right text-xs"
-                          />
-                        </label>
-                      ))}
+            {visibleCategories.length === 0 ? (
+              <div className="border border-line bg-canvas p-3 text-xs text-ink/50">
+                Tag a relevant scope above (e.g. Kitchen Remodel or Bathroom Remodel) to show finish selections here.
+              </div>
+            ) : (
+              <div className="max-h-64 overflow-y-auto border border-line bg-canvas">
+                {visibleCategories.map((cat) => (
+                  <div key={cat} className="border-b border-line p-2 last:border-b-0">
+                    <p className="mb-1 font-mono text-[9.5px] uppercase text-ink/40">{cat}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectionCatalog
+                        .filter((item) => item.category === cat)
+                        .map((item) => (
+                          <label key={item.id} className="flex items-center gap-1 text-xs">
+                            <span>{item.itemName}</span>
+                            <input
+                              type="number"
+                              value={selectionQty[item.id] ?? ""}
+                              onChange={(e) => setSelectionQty((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                              placeholder="0"
+                              className="w-12 border border-line px-1 py-0.5 text-right text-xs"
+                            />
+                          </label>
+                        ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

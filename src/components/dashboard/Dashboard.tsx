@@ -44,6 +44,7 @@ export function Dashboard({
   leads,
   milestoneTemplates,
   selectionCatalog,
+  quotesByLeadId,
   role,
   team,
   recommendations,
@@ -61,6 +62,7 @@ export function Dashboard({
   leads: Lead[];
   milestoneTemplates: MilestoneTemplateGroup[];
   selectionCatalog: SelectionCatalogItem[];
+  quotesByLeadId: Record<string, string>;
   role: Role | null;
   team: TeamMember[];
   recommendations: RecommendationRow[];
@@ -143,6 +145,7 @@ export function Dashboard({
           referralSources={data.referralSources}
           milestoneTemplates={milestoneTemplates}
           selectionCatalog={selectionCatalog}
+          quotesByLeadId={quotesByLeadId}
           role={role}
         />
       )}

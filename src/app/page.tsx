@@ -11,7 +11,7 @@ import {
 import { getProjectsIndex } from "@/lib/projects/queries";
 import { getLeads } from "@/lib/leads/queries";
 import { getMilestoneTemplates } from "@/lib/milestoneTemplates/queries";
-import { getSelectionCatalog } from "@/lib/quotes/queries";
+import { getSelectionCatalog, getLatestQuoteIdsByLead } from "@/lib/quotes/queries";
 import { getTeamMembers } from "@/lib/admin/queries";
 import { getActiveRecommendations, getWeeklyExtras } from "@/lib/intelligence/queries";
 import { getBackupHistory, getCurrentCycleStatus } from "@/lib/backup/queries";
@@ -42,6 +42,7 @@ export default async function HomePage() {
     leads,
     milestoneTemplates,
     selectionCatalog,
+    quotesByLeadId,
     team,
     opportunities,
     marketIntelLeads,
@@ -57,6 +58,7 @@ export default async function HomePage() {
     getLeads(),
     getMilestoneTemplates(),
     getSelectionCatalog(),
+    role === "owner" ? getLatestQuoteIdsByLead() : Promise.resolve({}),
     role === "owner" ? getTeamMembers() : Promise.resolve([]),
     getOpportunities(),
     getMarketIntelLeads(),
@@ -81,6 +83,7 @@ export default async function HomePage() {
       leads={leads}
       milestoneTemplates={milestoneTemplates}
       selectionCatalog={selectionCatalog}
+      quotesByLeadId={quotesByLeadId}
       role={role}
       team={team}
       recommendations={recommendations}
