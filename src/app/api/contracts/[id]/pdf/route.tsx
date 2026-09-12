@@ -10,13 +10,21 @@ import {
   type ContractDocument,
 } from "@/lib/contracts/schedules";
 import { getLogoBuffer } from "@/lib/pdf/logo";
+import { COMPANY_INFO } from "@/lib/pdf/companyInfo";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", lineHeight: 1.4 },
-  logo: { width: 130, marginBottom: 14 },
+  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
+  logo: { width: 150 },
+  preparedFor: { alignItems: "flex-end" },
+  boldLabel: { fontFamily: "Helvetica-Bold", fontSize: 10, marginBottom: 4 },
+  clientNameText: { fontFamily: "Helvetica-Bold", fontSize: 11, marginBottom: 2, textAlign: "right" },
+  rightText: { fontSize: 10, textAlign: "right", color: "#333", marginBottom: 1 },
+  companyBlock: { marginBottom: 14 },
+  companyLine: { fontSize: 10, marginBottom: 3 },
   title: { fontSize: 16, marginBottom: 4 },
   subtitle: { fontSize: 10, color: "#666", marginBottom: 20 },
   scheduleTitle: { fontSize: 13, marginBottom: 10, textTransform: "uppercase" },
@@ -33,12 +41,18 @@ function fmtUsd(n: number): string {
 function ContractPdf({
   logo,
   clientName,
+  clientEmail,
+  clientPhone,
+  clientState,
   projectName,
   doc,
   initialPaymentLine,
 }: {
   logo: Buffer;
   clientName: string;
+  clientEmail: string | null;
+  clientPhone: string | null;
+  clientState: string | null;
   projectName: string;
   doc: ContractDocument;
   initialPaymentLine: string;
@@ -46,11 +60,34 @@ function ContractPdf({
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
-        <Image src={logo} style={styles.logo} />
+        <View style={styles.topRow}>
+          <Image src={logo} style={styles.logo} />
+          <View style={styles.preparedFor}>
+            <Text style={styles.boldLabel}>Prepared for:</Text>
+            <Text style={styles.clientNameText}>{clientName}</Text>
+            {clientState && <Text style={styles.rightText}>{clientState}</Text>}
+            {clientPhone && <Text style={styles.rightText}>Tel: {clientPhone}</Text>}
+            {clientEmail && <Text style={styles.rightText}>Email: {clientEmail}</Text>}
+          </View>
+        </View>
+
+        <View style={styles.companyBlock}>
+          <Text style={styles.companyLine}>
+            <Text style={styles.boldLabel}>Email: </Text>
+            {COMPANY_INFO.email}
+          </Text>
+          <Text style={styles.companyLine}>
+            <Text style={styles.boldLabel}>Tel: </Text>
+            {COMPANY_INFO.phone}
+          </Text>
+          <Text style={styles.companyLine}>
+            <Text style={styles.boldLabel}>Business Hours: </Text>
+            {COMPANY_INFO.hours}
+          </Text>
+        </View>
+
         <Text style={styles.title}>Below the Trusses — Design Services Agreement</Text>
-        <Text style={styles.subtitle}>
-          {clientName} · {projectName}
-        </Text>
+        <Text style={styles.subtitle}>{projectName}</Text>
         <Text style={styles.body}>
           This letter, including all of the schedules referenced in this letter (our "Agreement") confirms our
           understanding concerning the interior design services to be rendered by our firm Below the Trusses (the
@@ -113,7 +150,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     supabase.from("milestones").select("name, due_date, amount_due, sequence_order").eq("project_id", contract.project_id).order("sequence_order"),
     supabase
       .from("quotes")
-      .select("id, quote_line_items(task_name, hours)")
+      .select("id, quote_line_items(task_name, hours), leads(email, phone)")
       .eq("project_id", contract.project_id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -125,6 +162,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const project = projectRes.data;
   const client = Array.isArray(project.clients) ? project.clients[0] : project.clients;
   const clientName = client?.name ?? "Client";
+  const lead = Array.isArray(quoteLineItemsRes.data?.leads) ? quoteLineItemsRes.data.leads[0] : quoteLineItemsRes.data?.leads;
+  const clientEmail = lead?.email ?? null;
+  const clientPhone = lead?.phone ?? null;
 
   const scopeLines = (quoteLineItemsRes.data?.quote_line_items ?? [])
     .filter((li: { hours: number }) => li.hours > 0)
@@ -181,7 +221,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     : "We ask that you confirm the foregoing by signing and returning a copy of this letter.";
 
   const buffer = await renderToBuffer(
-    <ContractPdf logo={getLogoBuffer()} clientName={clientName} projectName={project.name} doc={doc} initialPaymentLine={initialPaymentLine} />
+    <ContractPdf
+      logo={getLogoBuffer()}
+      clientName={clientName}
+      clientEmail={clientEmail}
+      clientPhone={clientPhone}
+      clientState={project.state}
+      projectName={project.name}
+      doc={doc}
+      initialPaymentLine={initialPaymentLine}
+    />
   );
 
   const storagePath = `contracts/${id}.pdf`;

@@ -220,6 +220,7 @@ export function LeadsTab({
                   <Th field="referral" label="Referral" sortField={sortField} sortAsc={sortAsc} onSort={toggleSort} />
                   <Th field="status" label="Status" sortField={sortField} sortAsc={sortAsc} onSort={toggleSort} />
                   <Th field="days" label="Last Contact" sortField={sortField} sortAsc={sortAsc} onSort={toggleSort} />
+                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
@@ -242,7 +243,7 @@ export function LeadsTab({
                           {lead.phone && <div>{lead.phone}</div>}
                         </td>
                         <td className="px-3 py-2">{lead.projectType ?? "—"}</td>
-                        <td className="px-3 py-2 text-ink/70">
+                        <td className="max-w-[160px] px-3 py-2 text-ink/70">
                           {lead.scopeTags.length > 0 ? lead.scopeTags.join(", ") : "—"}
                         </td>
                         <td className="px-3 py-2 text-ink/70">
@@ -256,23 +257,25 @@ export function LeadsTab({
                           <span className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${s.className}`}>
                             {lead.status}
                           </span>
+                        </td>
+                        <td className={`px-3 py-2 font-mono text-xs ${s.label}`}>{days}d ago</td>
+                        <td className="px-3 py-2 text-right">
                           {quotesByLeadId[lead.id] && (
                             <a
                               href={`/api/quotes/${quotesByLeadId[lead.id]}/pdf`}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="mt-1 block font-mono text-[10px] uppercase text-brand-primary underline underline-offset-2"
+                              className="inline-block whitespace-nowrap border border-ink px-2.5 py-1 font-mono text-[10px] uppercase text-ink hover:bg-canvas"
                             >
                               Download PDF
                             </a>
                           )}
                         </td>
-                        <td className={`px-3 py-2 font-mono text-xs ${s.label}`}>{days}d ago</td>
                       </tr>
                       {isOpen && (
                         <tr key={`${lead.id}-edit`} className="border-b border-line bg-canvas">
-                          <td colSpan={8} className="p-4">
+                          <td colSpan={9} className="p-4">
                             <LeadEditPanel
                               lead={lead}
                               referralSources={referralSources}
