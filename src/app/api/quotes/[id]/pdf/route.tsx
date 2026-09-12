@@ -28,7 +28,6 @@ const styles = StyleSheet.create({
   sectionHeader: { fontSize: 9, textTransform: "uppercase", color: "#888", marginTop: 14, marginBottom: 4 },
   row: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: "#ccc", paddingVertical: 3 },
   taskCol: { flex: 3 },
-  hoursCol: { flex: 1, textAlign: "right" },
   totalsBlock: { marginTop: 20, alignItems: "flex-end" },
   totalsRow: { flexDirection: "row", width: 220, justifyContent: "space-between", marginBottom: 2 },
   grandTotal: { fontSize: 13, marginTop: 4 },
@@ -154,17 +153,18 @@ function QuotePdf(props: QuotePdfProps) {
               .map((li, i) => (
                 <View key={i} style={styles.row}>
                   <Text style={styles.taskCol}>{li.taskName}</Text>
-                  <Text style={styles.hoursCol}>{li.hours} hrs</Text>
                 </View>
               ))}
           </View>
         ))}
 
         <View style={styles.totalsBlock}>
-          <View style={styles.totalsRow}>
-            <Text>Subtotal</Text>
-            <Text>{fmtUsd(props.subtotal)}</Text>
-          </View>
+          {(props.discountLabel || props.pmFeeLabel) && (
+            <View style={styles.totalsRow}>
+              <Text>Subtotal</Text>
+              <Text>{fmtUsd(props.subtotal)}</Text>
+            </View>
+          )}
           {props.discountLabel && (
             <View style={styles.totalsRow}>
               <Text>{props.discountLabel}</Text>
