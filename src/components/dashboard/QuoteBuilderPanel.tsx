@@ -5,10 +5,13 @@ import { createClient } from "@/lib/supabase/client";
 import type { Lead } from "@/lib/leads/types";
 import type { ReferralSource } from "@/lib/dashboard/types";
 import type { SelectionCatalogItem } from "@/lib/quotes/types";
+import type { ClientOption } from "@/lib/clients/types";
+import { resolveClientId } from "@/lib/clients/resolveClient";
 import { QUOTE_TASK_CATALOG, SCOPE_TO_SELECTION_CATEGORIES } from "@/lib/scope";
 import { toIsoDate } from "@/lib/hours/dates";
 import { isValidBudgetRange, isValidEmail, isValidPhone } from "@/lib/validation";
 import { ScopePills, ReferralSourceSelect } from "./LeadsTab";
+import { ClientPicker } from "./ClientPicker";
 
 const TYPES = ["Residential", "Commercial", "Furniture"] as const;
 const FINISH_SELECTIONS_TASK = "Finish Selections";
@@ -34,12 +37,14 @@ export function QuoteBuilderPanel({
   lead,
   selectionCatalog,
   referralSources,
+  clients,
   onClose,
   onCreated,
 }: {
   lead: Lead | null;
   selectionCatalog: SelectionCatalogItem[];
   referralSources: ReferralSource[];
+  clients: ClientOption[];
   onClose: () => void;
   onCreated: (result: { lead: Lead; projectId: string; quoteId: string }) => void;
 }) {
@@ -47,6 +52,7 @@ export function QuoteBuilderPanel({
   // yet (e.g. a client calling in directly rather than coming from the
   // Leads pipeline). When a lead is passed, its own data is used as-is.
   const [name, setName] = useState(lead?.name ?? "");
+  const [client, setClient] = useState<{ id: string | null; name: string }>({ id: null, name: lead?.name ?? "" });
   const [email, setEmail] = useState(lead?.email ?? "");
   const [phone, setPhone] = useState(lead?.phone ?? "");
   const [state, setState] = useState(lead?.state ?? "");
@@ -118,6 +124,7 @@ export function QuoteBuilderPanel({
     if (!lead && !isValidBudgetRange(budgetRange)) return setError('Budget should be a dollar amount or range, e.g. "$10k–$20k".');
     if (!lead && !isValidEmail(email)) return setError("Enter a valid email address.");
     if (!lead && !isValidPhone(phone)) return setError("Enter a valid phone number.");
+    if (!client.name.trim()) return setError("Client is required.");
 
     setSaving(true);
     const supabase = createClient();
@@ -172,21 +179,17 @@ export function QuoteBuilderPanel({
       };
     }
 
-    const { data: client, error: clientError } = await supabase
-      .from("clients")
-      .upsert({ name: effectiveLead.name.trim() }, { onConflict: "name" })
-      .select("id")
-      .single();
-    if (clientError) {
+    const clientResult = await resolveClientId(supabase, clients, client);
+    if ("error" in clientResult) {
       setSaving(false);
-      setError(clientError.message);
+      setError(clientResult.error);
       return;
     }
 
     const { data: project, error: projectError } = await supabase
       .from("projects")
       .insert({
-        client_id: client.id,
+        client_id: clientResult.id,
         name: effectiveLead.name,
         type: projectType,
         state: effectiveLead.state,
@@ -367,6 +370,10 @@ export function QuoteBuilderPanel({
               )}
             </div>
           )}
+
+          <div className="max-w-xs">
+            <ClientPicker clients={clients} value={client} onChange={setClient} />
+          </div>
 
           <div>
             <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Project Type</label>

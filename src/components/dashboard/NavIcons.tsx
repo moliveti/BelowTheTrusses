@@ -80,6 +80,16 @@ export function ProjectsIcon({ className }: IconProps) {
   );
 }
 
+export function ClientsIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="4" y="3" width="10" height="18" />
+      <rect x="14" y="9" width="6" height="12" />
+      <path d="M7 7h1M10 7h1M7 11h1M10 11h1M7 15h1M10 15h1" />
+    </svg>
+  );
+}
+
 export function SowIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>

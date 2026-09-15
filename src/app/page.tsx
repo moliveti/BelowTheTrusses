@@ -9,6 +9,7 @@ import {
   getSubcontractorRates,
 } from "@/lib/hours/queries";
 import { getProjectsIndex } from "@/lib/projects/queries";
+import { getClientsIndex, getAllClientOptions } from "@/lib/clients/queries";
 import { getLeads } from "@/lib/leads/queries";
 import { getMilestoneTemplates } from "@/lib/milestoneTemplates/queries";
 import { getSelectionCatalog, getLatestQuoteIdsByLead } from "@/lib/quotes/queries";
@@ -38,6 +39,8 @@ export default async function HomePage() {
     activeProjects,
     assignments,
     projects,
+    clients,
+    clientOptions,
     rates,
     leads,
     milestoneTemplates,
@@ -54,6 +57,8 @@ export default async function HomePage() {
     getAllActiveProjectOptions(),
     getProjectSubcontractorAssignments(),
     getProjectsIndex(),
+    getClientsIndex(),
+    getAllClientOptions(),
     getSubcontractorRates(),
     getLeads(),
     getMilestoneTemplates(),
@@ -80,6 +85,8 @@ export default async function HomePage() {
       userEmail={user?.email}
       contractedWork={{ timeEntries, subcontractors, activeProjects, assignments, rates }}
       projects={projects}
+      clients={clients}
+      clientOptions={clientOptions}
       leads={leads}
       milestoneTemplates={milestoneTemplates}
       selectionCatalog={selectionCatalog}

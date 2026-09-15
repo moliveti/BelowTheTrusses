@@ -6,6 +6,7 @@ import {
   AiIcon,
   ChartIcon,
   ChevronIcon,
+  ClientsIcon,
   ContractedIcon,
   LeadsIcon,
   PriorityIcon,
@@ -26,6 +27,7 @@ export type Tab =
   | "contracted"
   | "productivity"
   | "projects"
+  | "clients"
   | "sow"
   | "team";
 
@@ -42,6 +44,7 @@ export const TABS: { key: Tab; label: string; description: string; Icon: (props:
   { key: "contracted", label: "Hourly Cost of Contracted Work", description: "Subcontractor hours, cost, and billing status", Icon: ContractedIcon },
   { key: "productivity", label: "Productivity", description: "Hours logged by person", Icon: ProductivityIcon },
   { key: "projects", label: "Projects", description: "All projects and billing status", Icon: ProjectsIcon },
+  { key: "clients", label: "Clients", description: "Clients and the projects nested under them", Icon: ClientsIcon },
   { key: "sow", label: "Business Not Materialized", description: "Proposals that didn't convert", Icon: SowIcon },
   { key: "team", label: "Admin", description: "Users, access, and backups", Icon: TeamIcon },
 ];

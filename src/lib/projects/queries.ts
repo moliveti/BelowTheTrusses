@@ -27,10 +27,23 @@ export async function getAllMilestonesForIntelligence(): Promise<MilestoneForInt
 }
 
 export async function getProjectsIndex(): Promise<ProjectListItem[]> {
+  return getProjectListItems();
+}
+
+/** Same rows as getProjectsIndex(), scoped to one client — powers the client detail page's project list. */
+export async function getProjectsForClient(clientId: string): Promise<ProjectListItem[]> {
+  return getProjectListItems(clientId);
+}
+
+async function getProjectListItems(clientId?: string): Promise<ProjectListItem[]> {
   const supabase = await createClient();
 
+  let projectsQuery = supabase.from("projects").select("id, name, type, active, status, contract_value, clients(name)");
+  if (clientId) projectsQuery = projectsQuery.eq("client_id", clientId);
+  projectsQuery = projectsQuery.order("name");
+
   const [projectsRes, milestonesRes, timeEntriesRes] = await Promise.all([
-    supabase.from("projects").select("id, name, type, active, status, contract_value, clients(name)").order("name"),
+    projectsQuery,
     supabase.from("milestones").select("project_id, amount_due, amount_paid"),
     supabase.from("subcontractor_time_entries").select("project_id, hours, hourly_rate"),
   ]);

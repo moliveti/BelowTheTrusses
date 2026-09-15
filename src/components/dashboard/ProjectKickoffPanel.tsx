@@ -4,7 +4,10 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead } from "@/lib/leads/types";
 import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
+import type { ClientOption } from "@/lib/clients/types";
+import { resolveClientId } from "@/lib/clients/resolveClient";
 import { toIsoDate } from "@/lib/hours/dates";
+import { ClientPicker } from "./ClientPicker";
 
 const TYPES = ["Residential", "Commercial", "Furniture"] as const;
 const BILLING_METHODS = ["Fixed Fee", "Hourly", "Commission"] as const;
@@ -25,17 +28,19 @@ function addDays(iso: string, days: number): string {
 export function ProjectKickoffPanel({
   lead,
   milestoneTemplates,
+  clients,
   onClose,
   onCreated,
 }: {
   lead: Lead;
   milestoneTemplates: MilestoneTemplateGroup[];
+  clients: ClientOption[];
   onClose: () => void;
   onCreated: (projectId: string) => void;
 }) {
   const [signedDate, setSignedDate] = useState(toIsoDate(new Date()));
   const [projectName, setProjectName] = useState(lead.name);
-  const [clientName, setClientName] = useState(lead.name);
+  const [client, setClient] = useState<{ id: string | null; name: string }>({ id: null, name: lead.name });
   const [projectType, setProjectType] = useState<(typeof TYPES)[number]>(
     (lead.projectType as (typeof TYPES)[number]) || "Residential"
   );
@@ -86,27 +91,23 @@ export function ProjectKickoffPanel({
     e.preventDefault();
     setError("");
     if (!projectName.trim()) return setError("Project name is required.");
-    if (!clientName.trim()) return setError("Client name is required.");
+    if (!client.name.trim()) return setError("Client name is required.");
 
     setSaving(true);
     const supabase = createClient();
     const value = contractValue ? Number(contractValue) : null;
 
-    const { data: client, error: clientError } = await supabase
-      .from("clients")
-      .upsert({ name: clientName.trim() }, { onConflict: "name" })
-      .select("id")
-      .single();
-    if (clientError) {
+    const clientResult = await resolveClientId(supabase, clients, client);
+    if ("error" in clientResult) {
       setSaving(false);
-      setError(clientError.message);
+      setError(clientResult.error);
       return;
     }
 
     const { data: project, error: projectError } = await supabase
       .from("projects")
       .insert({
-        client_id: client.id,
+        client_id: clientResult.id,
         name: projectName.trim(),
         type: projectType,
         state: lead.state,
@@ -238,12 +239,7 @@ export function ProjectKickoffPanel({
               />
             </div>
             <div>
-              <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Client Name</label>
-              <input
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                className="w-full border border-line px-2 py-1.5 text-xs"
-              />
+              <ClientPicker clients={clients} value={client} onChange={setClient} label="Client Name" />
             </div>
           </div>
 

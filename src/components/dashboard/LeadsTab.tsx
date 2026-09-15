@@ -8,6 +8,7 @@ import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import { toIsoDate } from "@/lib/hours/dates";
 import { SCOPE_CATEGORIES } from "@/lib/scope";
 import type { SelectionCatalogItem } from "@/lib/quotes/types";
+import type { ClientOption } from "@/lib/clients/types";
 import type { Role } from "@/lib/profile";
 import { canBuildQuotes } from "@/lib/permissions";
 import { isValidBudgetRange, isValidEmail, isValidPhone } from "@/lib/validation";
@@ -70,6 +71,7 @@ export function LeadsTab({
   referralSources: initialReferralSources,
   milestoneTemplates,
   selectionCatalog,
+  clients,
   quotesByLeadId: initialQuotesByLeadId,
   role,
 }: {
@@ -77,6 +79,7 @@ export function LeadsTab({
   referralSources: ReferralSource[];
   milestoneTemplates: MilestoneTemplateGroup[];
   selectionCatalog: SelectionCatalogItem[];
+  clients: ClientOption[];
   quotesByLeadId: Record<string, string>;
   role: Role | null;
 }) {
@@ -302,6 +305,7 @@ export function LeadsTab({
         <ProjectKickoffPanel
           lead={kickoffLead}
           milestoneTemplates={milestoneTemplates}
+          clients={clients}
           onClose={() => setKickoffLead(null)}
           onCreated={(projectId) => {
             patchLead(kickoffLead.id, { status: "Signed Contract", convertedProjectId: projectId });
@@ -315,6 +319,7 @@ export function LeadsTab({
           lead={quoteTarget === "standalone" ? null : quoteTarget}
           selectionCatalog={selectionCatalog}
           referralSources={referralSources}
+          clients={clients}
           onClose={() => setQuoteTarget(null)}
           onCreated={({ lead: resultLead, quoteId }) => {
             if (leads.some((l) => l.id === resultLead.id)) {

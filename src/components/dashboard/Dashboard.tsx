@@ -8,6 +8,7 @@ import type { ProjectListItem } from "@/lib/projects/types";
 import type { Lead } from "@/lib/leads/types";
 import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import type { SelectionCatalogItem } from "@/lib/quotes/types";
+import type { ClientListItem, ClientOption } from "@/lib/clients/types";
 import type { TeamMember } from "@/lib/admin/types";
 import type { Role } from "@/lib/profile";
 import type { RecommendationRow } from "@/lib/intelligence/queries";
@@ -25,6 +26,7 @@ import { LeadsTab } from "./LeadsTab";
 import { TeamTab } from "./TeamTab";
 import { TodayTab } from "./TodayTab";
 import { ProjectsIndex } from "@/components/projects/ProjectsIndex";
+import { ClientsIndex } from "@/components/clients/ClientsIndex";
 import { AppShell } from "@/components/AppShell";
 import { TAB_KEYS, type Tab } from "@/components/AppSidebar";
 
@@ -41,6 +43,8 @@ export function Dashboard({
   userEmail,
   contractedWork,
   projects,
+  clients,
+  clientOptions,
   leads,
   milestoneTemplates,
   selectionCatalog,
@@ -59,6 +63,8 @@ export function Dashboard({
   userEmail: string | undefined;
   contractedWork: ContractedWorkData;
   projects: ProjectListItem[];
+  clients: ClientListItem[];
+  clientOptions: ClientOption[];
   leads: Lead[];
   milestoneTemplates: MilestoneTemplateGroup[];
   selectionCatalog: SelectionCatalogItem[];
@@ -145,6 +151,7 @@ export function Dashboard({
           referralSources={data.referralSources}
           milestoneTemplates={milestoneTemplates}
           selectionCatalog={selectionCatalog}
+          clients={clientOptions}
           quotesByLeadId={quotesByLeadId}
           role={role}
         />
@@ -169,6 +176,7 @@ export function Dashboard({
       )}
       {tab === "productivity" && <ProductivityTab entries={contractedWork.timeEntries} />}
       {tab === "projects" && <ProjectsIndex projects={projects} />}
+      {tab === "clients" && <ClientsIndex clients={clients} />}
       {tab === "sow" && <SowTab rows={data.sow} />}
       {tab === "team" && role === "owner" && (
         <TeamTab team={team} backupHistory={backupHistory} currentBackupCycle={currentBackupCycle} marketIntelRun={marketIntelRun} />
