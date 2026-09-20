@@ -13,6 +13,7 @@ export const SCOPE_CATEGORIES = [
   "Home Addition",
   "Covered Garage",
   "Permit Sets",
+  "Space Planning",
 ];
 
 // Which selection_catalog categories (Kitchen/Appliances/Bathroom/Paint/
@@ -46,7 +47,14 @@ export interface QuoteTaskDefault {
 export const QUOTE_TASK_CATALOG: QuoteTaskDefault[] = [
   { section: "Construction Documents", taskName: "Field Verification", rate: 200 },
   { section: "Construction Documents", taskName: "Field Input", rate: 200 },
-  { section: "Construction Documents", taskName: "CD Production", rate: 200 },
+  { section: "Construction Documents", taskName: "Cover Sheet", rate: 200 },
+  { section: "Construction Documents", taskName: "Exterior Elevations", rate: 200 },
+  { section: "Construction Documents", taskName: "Demolition Plan", rate: 200 },
+  { section: "Construction Documents", taskName: "Construction Plan", rate: 200 },
+  { section: "Construction Documents", taskName: "Reflected Ceiling Plan", rate: 200 },
+  { section: "Construction Documents", taskName: "Electrical Additions Plan", rate: 200 },
+  { section: "Construction Documents", taskName: "Finish Plan", rate: 200 },
+  { section: "Construction Documents", taskName: "Elevations and Sections", rate: 200 },
   { section: "Construction Documents", taskName: "Director Review", rate: 200 },
   { section: "Construction Documents", taskName: "Redlines", rate: 200 },
   { section: "Construction Documents", taskName: "CD Review Meeting with Client", rate: 200 },

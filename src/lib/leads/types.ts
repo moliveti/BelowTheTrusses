@@ -12,7 +12,10 @@ export interface Lead {
   email: string | null;
   phone: string | null;
   projectType: string | null;
+  address: string | null;
+  city: string | null;
   state: string | null;
+  zip: string | null;
   budgetRange: string | null;
   /** 1st-of-month date strings marking a tentative start/end window, not firm commitments. */
   timelineStartMonth: string | null;

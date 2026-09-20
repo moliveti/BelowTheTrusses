@@ -88,7 +88,10 @@ interface QuotePdfProps {
   leadName: string;
   leadEmail: string | null;
   leadPhone: string | null;
+  leadAddress: string | null;
+  leadCity: string | null;
   leadState: string | null;
+  leadZip: string | null;
   projectType: string;
   createdAt: string;
   lineItems: { section: string; taskName: string; hours: number; rate: number; amount: number }[];
@@ -114,7 +117,12 @@ function QuotePdf(props: QuotePdfProps) {
             </Text>
             <Text style={styles.boldLabel}>Prepared for:</Text>
             <Text style={styles.clientNameText}>{props.leadName}</Text>
-            {props.leadState && <Text style={styles.leftText}>{props.leadState}</Text>}
+            {props.leadAddress && <Text style={styles.leftText}>{props.leadAddress}</Text>}
+            {(props.leadCity || props.leadState || props.leadZip) && (
+              <Text style={styles.leftText}>
+                {[props.leadCity, [props.leadState, props.leadZip].filter(Boolean).join(" ")].filter(Boolean).join(", ")}
+              </Text>
+            )}
             {props.leadPhone && <Text style={styles.leftText}>Tel: {props.leadPhone}</Text>}
             {props.leadEmail && <Text style={styles.leftText}>Email: {props.leadEmail}</Text>}
           </View>
@@ -196,7 +204,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { data: quote, error } = await supabase
     .from("quotes")
     .select(
-      "id, project_type, discount_type, discount_value, pm_hourly_rate, pm_estimated_hours, subtotal, total, created_at, leads(name, email, phone, state)"
+      "id, project_type, discount_type, discount_value, pm_hourly_rate, pm_estimated_hours, subtotal, total, created_at, leads(name, email, phone, address, city, state, zip)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -231,7 +239,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       leadName={lead?.name ?? "Client"}
       leadEmail={lead?.email ?? null}
       leadPhone={lead?.phone ?? null}
+      leadAddress={lead?.address ?? null}
+      leadCity={lead?.city ?? null}
       leadState={lead?.state ?? null}
+      leadZip={lead?.zip ?? null}
       projectType={quote.project_type}
       createdAt={quote.created_at}
       lineItems={mappedLineItems}

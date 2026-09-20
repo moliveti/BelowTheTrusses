@@ -98,6 +98,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           Scope
         </h3>
         <ScopeSection
+          key={project.type}
           projectId={project.id}
           initialScopeTags={project.scopeTags}
           contractValue={project.contractValue}

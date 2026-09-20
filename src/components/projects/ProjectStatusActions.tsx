@@ -8,6 +8,8 @@ import type { Quote } from "@/lib/quotes/types";
 import type { ContractSummary } from "@/lib/contracts/types";
 import { ContractBuilderPanel } from "@/components/dashboard/ContractBuilderPanel";
 
+const PROJECT_TYPES = ["Residential", "Commercial", "Furniture"] as const;
+
 export function ProjectStatusActions({
   project,
   quote,
@@ -19,6 +21,8 @@ export function ProjectStatusActions({
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(project.status);
+  const [projectType, setProjectType] = useState(project.type);
+  const [savingType, setSavingType] = useState(false);
   const [showContractBuilder, setShowContractBuilder] = useState(false);
   const [lastContractId, setLastContractId] = useState<string | null>(contract?.id ?? null);
   const [markingUnderContract, setMarkingUnderContract] = useState(false);
@@ -34,6 +38,19 @@ export function ProjectStatusActions({
     }
   }
 
+  // Plain corrective edit for a mis-entered type -- no cascading
+  // recalculation of rates/fees tied to type elsewhere.
+  async function changeProjectType(newType: string) {
+    setSavingType(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("projects").update({ type: newType }).eq("id", project.id);
+    setSavingType(false);
+    if (!error) {
+      setProjectType(newType);
+      router.refresh();
+    }
+  }
+
   if (!status) return null;
 
   return (
@@ -42,6 +59,20 @@ export function ProjectStatusActions({
       <span className="border border-brand-accent bg-brand-accent/10 px-2 py-0.5 font-mono text-[10.5px] uppercase text-brand-accent">
         {status}
       </span>
+
+      <span className="ml-2 font-mono text-[10px] uppercase tracking-wide text-ink/50">Project Type</span>
+      <select
+        value={projectType}
+        disabled={savingType}
+        onChange={(e) => changeProjectType(e.target.value)}
+        className="border border-line px-2 py-1 font-mono text-[10.5px] uppercase disabled:opacity-50"
+      >
+        {PROJECT_TYPES.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
+      </select>
 
       {quote && (
         <a

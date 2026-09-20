@@ -200,6 +200,22 @@ export function ContractedWorkTab({
     if (!error) setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
+  // Submittal-error correction (wrong hours/date/description) -- subcontractor,
+  // project, and the frozen rate snapshot stay fixed; those still go through
+  // delete + re-add.
+  async function editEntry(id: string, patch: { hours: number; workDate: string; workDescription: string }): Promise<string | null> {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("subcontractor_time_entries")
+      .update({ hours: patch.hours, work_date: patch.workDate, work_description: patch.workDescription })
+      .eq("id", id);
+    if (error) return error.message;
+    setEntries((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, hours: patch.hours, workDate: patch.workDate, workDescription: patch.workDescription } : e))
+    );
+    return null;
+  }
+
   // "assignments" sub-tab is hidden for now (not currently useful) but the
   // tab/content logic below is left in place in case it's wanted again.
   const SUB_TABS: { key: typeof subTab; label: string }[] = [
@@ -339,7 +355,7 @@ export function ContractedWorkTab({
 
           <section>
             <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">All Entries</h3>
-            <EntriesTable entries={filtered} onDelete={deleteEntry} onMarkPaid={(id) => markPaid([id])} />
+            <EntriesTable entries={filtered} onDelete={deleteEntry} onMarkPaid={(id) => markPaid([id])} onEdit={editEntry} />
           </section>
         </>
       )}
@@ -781,15 +797,47 @@ function EntriesTable({
   entries,
   onDelete,
   onMarkPaid,
+  onEdit,
 }: {
   entries: TimeEntry[];
   onDelete: (id: string) => void;
   onMarkPaid: (id: string) => void;
+  onEdit: (id: string, patch: { hours: number; workDate: string; workDescription: string }) => Promise<string | null>;
 }) {
   const total = entries.reduce((s, e) => s + e.hours, 0);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftHours, setDraftHours] = useState("");
+  const [draftDate, setDraftDate] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   if (entries.length === 0) {
     return <div className="border border-line bg-surface p-4 text-sm text-ink/50">No matching entries.</div>;
+  }
+
+  function startEdit(e: TimeEntry) {
+    setEditingId(e.id);
+    setDraftHours(String(e.hours));
+    setDraftDate(e.workDate);
+    setDraftDescription(e.workDescription);
+    setEditError("");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditError("");
+  }
+
+  async function saveEdit(id: string) {
+    setSaving(true);
+    const error = await onEdit(id, { hours: Number(draftHours), workDate: draftDate, workDescription: draftDescription });
+    setSaving(false);
+    if (error) {
+      setEditError(error);
+      return;
+    }
+    setEditingId(null);
   }
 
   return (
@@ -807,37 +855,94 @@ function EntriesTable({
           </tr>
         </thead>
         <tbody>
-          {entries.map((e) => (
-            <tr key={e.id} className="border-b border-line hover:bg-canvas">
-              <td className="px-3 py-2 font-mono">{fmtShortDate(e.workDate)}</td>
-              <td className="px-3 py-2">{e.subcontractorName}</td>
-              <td className="px-3 py-2">{e.projectName}</td>
-              <td className="px-3 py-2 text-right font-mono tabular-nums">{e.hours.toFixed(2)}</td>
-              <td className="px-3 py-2">{e.workDescription}</td>
-              <td className="px-3 py-2">
-                <StatusBadge paid={e.paidAt !== null} />
-                {e.paidAt && <div className="mt-0.5 font-mono text-[9.5px] text-ink/40">{fmtShortDate(e.paidAt)}</div>}
-              </td>
-              <td className="px-3 py-2 text-right">
-                <div className="flex items-center justify-end gap-2">
-                  {e.paidAt === null && (
-                    <button
-                      onClick={() => onMarkPaid(e.id)}
-                      className="font-mono text-[11px] text-positive underline underline-offset-2"
-                    >
-                      Mark Paid
-                    </button>
+          {entries.map((e) => {
+            const isEditing = editingId === e.id;
+            return (
+              <tr key={e.id} className="border-b border-line hover:bg-canvas">
+                <td className="px-3 py-2 font-mono">
+                  {isEditing ? (
+                    <input
+                      type="date"
+                      value={draftDate}
+                      onChange={(ev) => setDraftDate(ev.target.value)}
+                      className="w-full border border-line px-1.5 py-1 text-xs"
+                    />
+                  ) : (
+                    fmtShortDate(e.workDate)
                   )}
-                  <button
-                    onClick={() => onDelete(e.id)}
-                    className="font-mono text-[11px] text-warning underline underline-offset-2"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="px-3 py-2">{e.subcontractorName}</td>
+                <td className="px-3 py-2">{e.projectName}</td>
+                <td className="px-3 py-2 text-right font-mono tabular-nums">
+                  {isEditing ? (
+                    <input
+                      type="number"
+                      step="0.25"
+                      value={draftHours}
+                      onChange={(ev) => setDraftHours(ev.target.value)}
+                      className="w-20 border border-line px-1.5 py-1 text-right text-xs"
+                    />
+                  ) : (
+                    e.hours.toFixed(2)
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  {isEditing ? (
+                    <input
+                      value={draftDescription}
+                      onChange={(ev) => setDraftDescription(ev.target.value)}
+                      className="w-full border border-line px-1.5 py-1 text-xs"
+                    />
+                  ) : (
+                    e.workDescription
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  <StatusBadge paid={e.paidAt !== null} />
+                  {e.paidAt && <div className="mt-0.5 font-mono text-[9.5px] text-ink/40">{fmtShortDate(e.paidAt)}</div>}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  {isEditing ? (
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => saveEdit(e.id)}
+                          disabled={saving}
+                          className="font-mono text-[11px] text-positive underline underline-offset-2 disabled:opacity-50"
+                        >
+                          {saving ? "…" : "Save"}
+                        </button>
+                        <button onClick={cancelEdit} className="font-mono text-[11px] text-ink/50 underline underline-offset-2">
+                          Cancel
+                        </button>
+                      </div>
+                      {editError && <span className="text-[10px] text-warning">{editError}</span>}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-end gap-2">
+                      {e.paidAt === null && (
+                        <button
+                          onClick={() => onMarkPaid(e.id)}
+                          className="font-mono text-[11px] text-positive underline underline-offset-2"
+                        >
+                          Mark Paid
+                        </button>
+                      )}
+                      <button onClick={() => startEdit(e)} className="font-mono text-[11px] text-brand-primary underline underline-offset-2">
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => onDelete(e.id)}
+                        className="font-mono text-[11px] text-warning underline underline-offset-2"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
           <tr className="border-t-[1.5px] border-ink font-bold">
             <td className="px-3 py-2" colSpan={3}>
               Total

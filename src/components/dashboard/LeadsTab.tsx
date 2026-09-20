@@ -7,6 +7,7 @@ import type { ReferralSource } from "@/lib/dashboard/types";
 import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import { toIsoDate } from "@/lib/hours/dates";
 import { SCOPE_CATEGORIES } from "@/lib/scope";
+import { US_STATES } from "@/lib/usStates";
 import type { SelectionCatalogItem } from "@/lib/quotes/types";
 import type { ClientOption } from "@/lib/clients/types";
 import type { Role } from "@/lib/profile";
@@ -526,7 +527,10 @@ function LeadIntakeForm({
   const [phone, setPhone] = useState("");
   const [projectType, setProjectType] = useState("");
   const [scopeTags, setScopeTags] = useState<string[]>([]);
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [zip, setZip] = useState("");
   const [budgetRange, setBudgetRange] = useState("");
   const [timelineStart, setTimelineStart] = useState("");
   const [timelineEnd, setTimelineEnd] = useState("");
@@ -586,7 +590,10 @@ function LeadIntakeForm({
         phone: phone.trim() || null,
         project_type: projectType || null,
         scope_tags: scopeTags,
-        state: state.trim() || null,
+        address: address.trim() || null,
+        city: city.trim() || null,
+        state: state || null,
+        zip: zip.trim() || null,
         budget_range: budgetRange.trim() || null,
         timeline_start_month: timelineStartMonth,
         timeline_end_month: timelineEndMonth,
@@ -609,7 +616,10 @@ function LeadIntakeForm({
       phone: phone.trim() || null,
       projectType: projectType || null,
       scopeTags,
-      state: state.trim() || null,
+      address: address.trim() || null,
+      city: city.trim() || null,
+      state: state || null,
+      zip: zip.trim() || null,
       budgetRange: budgetRange.trim() || null,
       timelineStartMonth,
       timelineEndMonth,
@@ -628,7 +638,10 @@ function LeadIntakeForm({
     setPhone("");
     setProjectType("");
     setScopeTags([]);
+    setAddress("");
+    setCity("");
     setState("");
+    setZip("");
     setBudgetRange("");
     setTimelineStart("");
     setTimelineEnd("");
@@ -657,8 +670,27 @@ function LeadIntakeForm({
         <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
       </div>
       <div>
+        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Address</label>
+        <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
+      </div>
+      <div>
+        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">City</label>
+        <input value={city} onChange={(e) => setCity(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
+      </div>
+      <div>
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">State</label>
-        <input value={state} onChange={(e) => setState(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
+        <select value={state} onChange={(e) => setState(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs">
+          <option value="">—</option>
+          {US_STATES.map((s) => (
+            <option key={s.code} value={s.code}>
+              {s.code}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Zip</label>
+        <input value={zip} onChange={(e) => setZip(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
       </div>
 
       <div className="col-span-2 sm:col-span-4">
@@ -891,10 +923,41 @@ function LeadEditPanel({
         {phoneError && <span className="mt-1 block text-[10px] text-warning">{phoneError}</span>}
       </div>
       <div>
-        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">State</label>
+        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Address</label>
         <input
+          defaultValue={lead.address ?? ""}
+          onBlur={(e) => update("address", e.target.value || null, { address: e.target.value || null })}
+          className="w-full border border-line px-2 py-1.5 text-xs"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">City</label>
+        <input
+          defaultValue={lead.city ?? ""}
+          onBlur={(e) => update("city", e.target.value || null, { city: e.target.value || null })}
+          className="w-full border border-line px-2 py-1.5 text-xs"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">State</label>
+        <select
           defaultValue={lead.state ?? ""}
-          onBlur={(e) => update("state", e.target.value || null, { state: e.target.value || null })}
+          onChange={(e) => update("state", e.target.value || null, { state: e.target.value || null })}
+          className="w-full border border-line px-2 py-1.5 text-xs"
+        >
+          <option value="">—</option>
+          {US_STATES.map((s) => (
+            <option key={s.code} value={s.code}>
+              {s.code}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Zip</label>
+        <input
+          defaultValue={lead.zip ?? ""}
+          onBlur={(e) => update("zip", e.target.value || null, { zip: e.target.value || null })}
           className="w-full border border-line px-2 py-1.5 text-xs"
         />
       </div>

@@ -68,10 +68,10 @@ export function ScopeSection({
     markSaved(scopeTagId);
   }
 
-  if (projectType !== "Residential") {
+  if (projectType === "Furniture") {
     return (
       <div className="border border-line bg-surface p-4 text-sm text-ink/50">
-        Scope tracking applies to Residential projects only.
+        Scope tracking applies to Residential and Commercial projects only.
       </div>
     );
   }

@@ -11,6 +11,7 @@ export interface ProjectListItem {
   plannedRevenue: number | null;
   amountPaid: number;
   outstandingBalance: number;
+  scopeBreakdown: { name: string; percent: number }[];
 }
 
 export interface ScopeTagPercent {

@@ -10,6 +10,7 @@ import { resolveClientId } from "@/lib/clients/resolveClient";
 import { QUOTE_TASK_CATALOG, SCOPE_TO_SELECTION_CATEGORIES } from "@/lib/scope";
 import { toIsoDate } from "@/lib/hours/dates";
 import { isValidBudgetRange, isValidEmail, isValidPhone } from "@/lib/validation";
+import { US_STATES } from "@/lib/usStates";
 import { ScopePills, ReferralSourceSelect } from "./LeadsTab";
 import { ClientPicker } from "./ClientPicker";
 
@@ -55,7 +56,10 @@ export function QuoteBuilderPanel({
   const [client, setClient] = useState<{ id: string | null; name: string }>({ id: null, name: lead?.name ?? "" });
   const [email, setEmail] = useState(lead?.email ?? "");
   const [phone, setPhone] = useState(lead?.phone ?? "");
+  const [address, setAddress] = useState(lead?.address ?? "");
+  const [city, setCity] = useState(lead?.city ?? "");
   const [state, setState] = useState(lead?.state ?? "");
+  const [zip, setZip] = useState(lead?.zip ?? "");
   const [budgetRange, setBudgetRange] = useState(lead?.budgetRange ?? "");
   const [scopeTags, setScopeTags] = useState<string[]>(lead?.scopeTags ?? []);
   const [referralSourceId, setReferralSourceId] = useState(lead?.referralSourceId ?? "");
@@ -144,7 +148,10 @@ export function QuoteBuilderPanel({
           phone: phone.trim() || null,
           project_type: projectType,
           scope_tags: scopeTags,
-          state: state.trim() || null,
+          address: address.trim() || null,
+          city: city.trim() || null,
+          state: state || null,
+          zip: zip.trim() || null,
           budget_range: budgetRange.trim() || null,
           referral_source_id: finalReferralSourceId,
           status: "Quote Sent",
@@ -163,7 +170,10 @@ export function QuoteBuilderPanel({
         email: email.trim() || null,
         phone: phone.trim() || null,
         projectType,
-        state: state.trim() || null,
+        address: address.trim() || null,
+        city: city.trim() || null,
+        state: state || null,
+        zip: zip.trim() || null,
         budgetRange: budgetRange.trim() || null,
         timelineStartMonth: null,
         timelineEndMonth: null,
@@ -337,8 +347,27 @@ export function QuoteBuilderPanel({
                   <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
                 </div>
                 <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Address</label>
+                  <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">City</label>
+                  <input value={city} onChange={(e) => setCity(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
+                </div>
+                <div>
                   <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">State</label>
-                  <input value={state} onChange={(e) => setState(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
+                  <select value={state} onChange={(e) => setState(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs">
+                    <option value="">—</option>
+                    {US_STATES.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Zip</label>
+                  <input value={zip} onChange={(e) => setZip(e.target.value)} className="w-full border border-line px-2 py-1.5 text-xs" />
                 </div>
                 <div>
                   <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Client Budget</label>

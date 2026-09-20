@@ -43,7 +43,10 @@ function ContractPdf({
   clientName,
   clientEmail,
   clientPhone,
+  clientAddress,
+  clientCity,
   clientState,
+  clientZip,
   projectName,
   doc,
   initialPaymentLine,
@@ -52,7 +55,10 @@ function ContractPdf({
   clientName: string;
   clientEmail: string | null;
   clientPhone: string | null;
+  clientAddress: string | null;
+  clientCity: string | null;
   clientState: string | null;
+  clientZip: string | null;
   projectName: string;
   doc: ContractDocument;
   initialPaymentLine: string;
@@ -65,7 +71,12 @@ function ContractPdf({
           <View style={styles.preparedFor}>
             <Text style={styles.boldLabel}>Prepared for:</Text>
             <Text style={styles.clientNameText}>{clientName}</Text>
-            {clientState && <Text style={styles.rightText}>{clientState}</Text>}
+            {clientAddress && <Text style={styles.rightText}>{clientAddress}</Text>}
+            {(clientCity || clientState || clientZip) && (
+              <Text style={styles.rightText}>
+                {[clientCity, [clientState, clientZip].filter(Boolean).join(" ")].filter(Boolean).join(", ")}
+              </Text>
+            )}
             {clientPhone && <Text style={styles.rightText}>Tel: {clientPhone}</Text>}
             {clientEmail && <Text style={styles.rightText}>Email: {clientEmail}</Text>}
           </View>
@@ -150,7 +161,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     supabase.from("milestones").select("name, due_date, amount_due, sequence_order").eq("project_id", contract.project_id).order("sequence_order"),
     supabase
       .from("quotes")
-      .select("id, quote_line_items(task_name, hours), leads(email, phone)")
+      .select("id, quote_line_items(task_name, hours), leads(email, phone, address, city, state, zip)")
       .eq("project_id", contract.project_id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -165,6 +176,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const lead = Array.isArray(quoteLineItemsRes.data?.leads) ? quoteLineItemsRes.data.leads[0] : quoteLineItemsRes.data?.leads;
   const clientEmail = lead?.email ?? null;
   const clientPhone = lead?.phone ?? null;
+  const clientAddress = lead?.address ?? null;
+  const clientCity = lead?.city ?? null;
+  const clientState = lead?.state ?? null;
+  const clientZip = lead?.zip ?? null;
 
   const scopeLines = (quoteLineItemsRes.data?.quote_line_items ?? [])
     .filter((li: { hours: number }) => li.hours > 0)
@@ -226,7 +241,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       clientName={clientName}
       clientEmail={clientEmail}
       clientPhone={clientPhone}
-      clientState={project.state}
+      clientAddress={clientAddress}
+      clientCity={clientCity}
+      clientState={clientState}
+      clientZip={clientZip}
       projectName={project.name}
       doc={doc}
       initialPaymentLine={initialPaymentLine}

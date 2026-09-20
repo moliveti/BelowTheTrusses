@@ -24,7 +24,10 @@ function makeLead(overrides: Partial<Lead>): Lead {
     email: null,
     phone: null,
     projectType: "Residential",
+    address: null,
+    city: null,
     state: null,
+    zip: null,
     budgetRange: null,
     timelineStartMonth: null,
     timelineEndMonth: null,
@@ -279,6 +282,7 @@ function makeProject(overrides: Partial<ProjectListItem>): ProjectListItem {
     plannedRevenue: 10000,
     amountPaid: 0,
     outstandingBalance: 10000,
+    scopeBreakdown: [],
     ...overrides,
   };
 }

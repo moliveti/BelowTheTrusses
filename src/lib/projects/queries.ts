@@ -42,15 +42,20 @@ async function getProjectListItems(clientId?: string): Promise<ProjectListItem[]
   if (clientId) projectsQuery = projectsQuery.eq("client_id", clientId);
   projectsQuery = projectsQuery.order("name");
 
-  const [projectsRes, milestonesRes, timeEntriesRes] = await Promise.all([
+  const [projectsRes, milestonesRes, timeEntriesRes, scopeTagsRes] = await Promise.all([
     projectsQuery,
     supabase.from("milestones").select("project_id, amount_due, amount_paid"),
     supabase.from("subcontractor_time_entries").select("project_id, hours, hourly_rate"),
+    supabase
+      .from("project_scope_tags")
+      .select("project_id, percent_of_revenue, scope_tags(name)")
+      .not("percent_of_revenue", "is", null),
   ]);
 
   if (projectsRes.error) throw new Error(`projects: ${projectsRes.error.message}`);
   if (milestonesRes.error) throw new Error(`milestones: ${milestonesRes.error.message}`);
   if (timeEntriesRes.error) throw new Error(`subcontractor_time_entries: ${timeEntriesRes.error.message}`);
+  if (scopeTagsRes.error) throw new Error(`project_scope_tags: ${scopeTagsRes.error.message}`);
 
   const billingByProject = new Map<string, { amountDue: number; amountPaid: number }>();
   for (const m of milestonesRes.data ?? []) {
@@ -71,6 +76,14 @@ async function getProjectListItems(clientId?: string): Promise<ProjectListItem[]
     else entry.cost += e.hours * e.hourly_rate;
   }
 
+  const scopeByProject = new Map<string, { name: string; percent: number }[]>();
+  for (const s of scopeTagsRes.data ?? []) {
+    const tag = Array.isArray(s.scope_tags) ? s.scope_tags[0] : s.scope_tags;
+    if (!tag) continue;
+    if (!scopeByProject.has(s.project_id)) scopeByProject.set(s.project_id, []);
+    scopeByProject.get(s.project_id)!.push({ name: tag.name, percent: s.percent_of_revenue! });
+  }
+
   return (projectsRes.data ?? []).map((p) => {
     const client = Array.isArray(p.clients) ? p.clients[0] : p.clients;
     const billing = billingByProject.get(p.id) ?? { amountDue: 0, amountPaid: 0 };
@@ -88,6 +101,7 @@ async function getProjectListItems(clientId?: string): Promise<ProjectListItem[]
       plannedRevenue: p.contract_value,
       amountPaid: billing.amountPaid,
       outstandingBalance: billing.amountDue - billing.amountPaid,
+      scopeBreakdown: scopeByProject.get(p.id) ?? [],
     };
   });
 }
@@ -106,7 +120,7 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
       )
       .eq("id", id)
       .maybeSingle(),
-    supabase.from("scope_tags").select("id, name").order("name"),
+    supabase.from("scope_tags").select("id, name, category").order("name"),
     supabase.from("project_scope_tags").select("scope_tag_id, percent_of_revenue").eq("project_id", id),
     supabase
       .from("milestones")
@@ -212,12 +226,18 @@ export async function getProjectDetail(id: string): Promise<ProjectDetail | null
 
   const totalCollected = milestones.reduce((s, m) => s + (m.amountPaid ?? 0), 0);
 
+  // scope_tags.category is 'residential' | 'commercial' — Furniture projects
+  // have no category of their own, so they get no scope categories at all
+  // (ScopeSection shows a placeholder for that type).
+  const categoryForType = p.type === "Residential" ? "residential" : p.type === "Commercial" ? "commercial" : null;
   const percentByScopeTag = new Map((scopeTagsRes.data ?? []).map((s) => [s.scope_tag_id, s.percent_of_revenue]));
-  const scopeTags = (allScopeTagsRes.data ?? []).map((tag) => ({
-    id: tag.id,
-    name: tag.name,
-    percentOfRevenue: percentByScopeTag.get(tag.id) ?? null,
-  }));
+  const scopeTags = (allScopeTagsRes.data ?? [])
+    .filter((tag) => tag.category === categoryForType)
+    .map((tag) => ({
+      id: tag.id,
+      name: tag.name,
+      percentOfRevenue: percentByScopeTag.get(tag.id) ?? null,
+    }));
 
   return {
     id: p.id,
