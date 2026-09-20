@@ -19,5 +19,11 @@ export interface ClientOption {
 export interface ClientDetail {
   id: string;
   name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
   projects: ProjectListItem[];
 }

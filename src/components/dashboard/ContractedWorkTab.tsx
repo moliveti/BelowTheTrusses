@@ -688,7 +688,7 @@ function ManualEntryForm({
         hours: hoursNum,
         work_description: description.trim(),
       })
-      .select("id, work_date, hours, work_description, hourly_rate")
+      .select("id, work_date, hours, work_description, hourly_rate, created_at")
       .single();
 
     setSaving(false);
@@ -708,6 +708,7 @@ function ManualEntryForm({
       workDescription: data.work_description,
       hourlyRate: data.hourly_rate,
       paidAt: null,
+      createdAt: data.created_at,
     });
     setHours("");
     setDescription("");
@@ -845,7 +846,8 @@ function EntriesTable({
       <table className="w-full min-w-[860px] border-collapse text-[13px]">
         <thead>
           <tr className="border-b-2 border-ink">
-            <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Date</th>
+            <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Work Date</th>
+            <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Logged</th>
             <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Subcontractor</th>
             <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Project</th>
             <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Hours</th>
@@ -871,6 +873,7 @@ function EntriesTable({
                     fmtShortDate(e.workDate)
                   )}
                 </td>
+                <td className="px-3 py-2 font-mono text-ink/60">{fmtShortDate(e.createdAt.slice(0, 10))}</td>
                 <td className="px-3 py-2">{e.subcontractorName}</td>
                 <td className="px-3 py-2">{e.projectName}</td>
                 <td className="px-3 py-2 text-right font-mono tabular-nums">
@@ -944,7 +947,7 @@ function EntriesTable({
             );
           })}
           <tr className="border-t-[1.5px] border-ink font-bold">
-            <td className="px-3 py-2" colSpan={3}>
+            <td className="px-3 py-2" colSpan={4}>
               Total
             </td>
             <td className="px-3 py-2 text-right font-mono tabular-nums">{total.toFixed(2)}</td>

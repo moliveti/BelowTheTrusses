@@ -57,7 +57,7 @@ export function HoursEntry({
         hours: hoursNum,
         work_description: description.trim(),
       })
-      .select("id, project_id, work_date, hours, work_description")
+      .select("id, project_id, work_date, hours, work_description, created_at")
       .single();
 
     setSaving(false);
@@ -78,6 +78,7 @@ export function HoursEntry({
         workDescription: data.work_description,
         hourlyRate: null,
         paidAt: null,
+        createdAt: data.created_at,
       },
       ...prev,
     ]);

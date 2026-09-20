@@ -14,6 +14,7 @@ function makeEntry(overrides: Partial<TimeEntry>): TimeEntry {
     workDescription: "Plans",
     hourlyRate: 80,
     paidAt: null,
+    createdAt: "2026-08-11T00:00:00Z",
     ...overrides,
   };
 }

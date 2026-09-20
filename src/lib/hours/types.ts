@@ -11,6 +11,8 @@ export interface TimeEntry {
   hourlyRate: number | null;
   /** Date the subcontractor was actually paid for this entry — null until marked paid. */
   paidAt: string | null;
+  /** When this entry was actually entered into the system — distinct from workDate, which is self-reported. */
+  createdAt: string;
 }
 
 export interface ProjectOption {

@@ -77,10 +77,24 @@ export async function getAllClientOptions(): Promise<ClientOption[]> {
 
 export async function getClientDetail(id: string): Promise<ClientDetail | null> {
   const supabase = await createClient();
-  const { data: client, error } = await supabase.from("clients").select("id, name").eq("id", id).maybeSingle();
+  const { data: client, error } = await supabase
+    .from("clients")
+    .select("id, name, email, phone, address, city, state, zip")
+    .eq("id", id)
+    .maybeSingle();
   if (error) throw new Error(`clients: ${error.message}`);
   if (!client) return null;
 
   const projects = await getProjectsForClient(id);
-  return { id: client.id, name: client.name, projects };
+  return {
+    id: client.id,
+    name: client.name,
+    email: client.email,
+    phone: client.phone,
+    address: client.address,
+    city: client.city,
+    state: client.state,
+    zip: client.zip,
+    projects,
+  };
 }

@@ -1,9 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getMyRole } from "@/lib/profile";
+import { canBuildQuotes } from "@/lib/permissions";
 import { getClientDetail } from "@/lib/clients/queries";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
+import { ClientEditPanel } from "@/components/clients/ClientEditPanel";
 import { fmtUsd } from "@/lib/dashboard/format";
 
 const TYPE_CLASS: Record<string, string> = {
@@ -46,8 +48,22 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   return (
     <AppShell role={role} userEmail={user?.email} breadcrumb={breadcrumb}>
       <section className="mb-8">
-        <h2 className="mb-2 text-xl text-ink">{client.name}</h2>
-        <p className="text-sm text-ink/70">
+        {canBuildQuotes(role) ? (
+          <ClientEditPanel client={client} />
+        ) : (
+          <div className="mb-3">
+            <h2 className="text-xl text-ink">{client.name}</h2>
+            {client.address && <p className="text-sm text-ink/70">{client.address}</p>}
+            {(client.city || client.state || client.zip) && (
+              <p className="text-sm text-ink/70">
+                {[client.city, [client.state, client.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ")}
+              </p>
+            )}
+            {client.email && <p className="text-sm text-ink/70">Email: {client.email}</p>}
+            {client.phone && <p className="text-sm text-ink/70">Tel: {client.phone}</p>}
+          </div>
+        )}
+        <p className="mt-3 text-sm text-ink/70">
           {client.projects.length} {client.projects.length === 1 ? "project" : "projects"} · Planned Rev.{" "}
           {totalPlannedRevenue ? fmtUsd(totalPlannedRevenue) : "—"} · Paid {totalPaid ? fmtUsd(totalPaid) : "—"} ·
           Outstanding {totalOutstanding ? fmtUsd(totalOutstanding) : "—"}
