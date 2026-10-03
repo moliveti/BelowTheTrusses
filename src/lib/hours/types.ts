@@ -21,6 +21,14 @@ export interface ProjectOption {
   type: string;
 }
 
+/** A subcontractor's own view of one of their assigned projects — includes
+ * how many hours were committed to them on it, which plain ProjectOption
+ * (used for admin-side pickers that have no single subcontractor in
+ * context) doesn't carry. */
+export interface MyAssignedProject extends ProjectOption {
+  allocatedHours: number | null;
+}
+
 export interface SubcontractorProfile {
   id: string;
   name: string;

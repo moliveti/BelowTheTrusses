@@ -6,9 +6,13 @@ import type { TeamMember } from "@/lib/admin/types";
 import type { Role } from "@/lib/profile";
 import type { BackupRow, CurrentCycleStatus } from "@/lib/backup/queries";
 import type { MarketIntelRun } from "@/lib/government/types";
+import type { SubcontractorOption } from "@/lib/hours/types";
+import { useFieldStatus } from "@/hooks/useFieldStatus";
+import { FieldStatusBadge } from "@/components/FieldStatusBadge";
 import { BackupsSection } from "./BackupsSection";
 
 const ROLES: Role[] = ["owner", "staff", "subcontractor"];
+const NEW_SUBCONTRACTOR_SENTINEL = "__new__";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -28,11 +32,13 @@ async function errorFromResponse(res: Response): Promise<string> {
 
 export function TeamTab({
   team,
+  subcontractors,
   backupHistory,
   currentBackupCycle,
   marketIntelRun,
 }: {
   team: TeamMember[];
+  subcontractors: SubcontractorOption[];
   backupHistory: BackupRow[];
   currentBackupCycle: CurrentCycleStatus;
   marketIntelRun: MarketIntelRun | null;
@@ -46,7 +52,7 @@ export function TeamTab({
 
       <section className="mb-10">
         <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">New User</h3>
-        <NewUserForm />
+        <NewUserForm subcontractors={subcontractors} />
       </section>
 
       <section>
@@ -126,12 +132,25 @@ function UserRow({ member }: { member: TeamMember }) {
   const [role, setRole] = useState(member.role);
   const [roleError, setRoleError] = useState("");
   const [savingRole, setSavingRole] = useState(false);
+  const fieldStatus = useFieldStatus();
 
   const [resetting, setResetting] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
+
+  async function saveName(fullName: string) {
+    await fieldStatus.run("fullName", async () => {
+      const res = await fetch(`/api/admin/users/${member.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullName }),
+      });
+      if (!res.ok) return { error: await errorFromResponse(res) };
+      return { error: null };
+    });
+  }
 
   async function changeRole(newRole: Role) {
     setRoleError("");
@@ -176,8 +195,14 @@ function UserRow({ member }: { member: TeamMember }) {
   return (
     <tr className="border-b border-line align-top">
       <td className="px-3 py-2">
-        <div>{member.fullName ?? member.email}</div>
-        {member.fullName && <div className="text-xs text-ink/60">{member.email}</div>}
+        <input
+          defaultValue={member.fullName ?? ""}
+          placeholder={member.email}
+          onBlur={(e) => saveName(e.target.value.trim())}
+          className="w-full border border-transparent px-1 py-0.5 text-[13px] hover:border-line focus:border-brand-primary focus:outline-none"
+        />
+        <FieldStatusBadge status={fieldStatus.status.fullName} error={fieldStatus.error.fullName} />
+        <div className="text-xs text-ink/60">{member.email}</div>
       </td>
       <td className="px-3 py-2">
         <select
@@ -243,16 +268,19 @@ function UserRow({ member }: { member: TeamMember }) {
   );
 }
 
-function NewUserForm() {
+function NewUserForm({ subcontractors }: { subcontractors: SubcontractorOption[] }) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("staff");
+  const [subcontractorId, setSubcontractorId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedMessage, setSavedMessage] = useState(false);
   const savedTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const linkingNew = subcontractorId === NEW_SUBCONTRACTOR_SENTINEL;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -260,12 +288,21 @@ function NewUserForm() {
     setSavedMessage(false);
     if (!email.trim()) return setError("Email is required.");
     if (password.length < 8) return setError("Password must be at least 8 characters.");
+    if (role === "subcontractor" && !subcontractorId) {
+      return setError("Pick which subcontractor record this login belongs to, or add a new one.");
+    }
 
     setSaving(true);
     const res = await fetch("/api/admin/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fullName: fullName.trim(), email: email.trim(), password, role }),
+      body: JSON.stringify({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        password,
+        role,
+        subcontractorId: role === "subcontractor" && !linkingNew ? subcontractorId : "",
+      }),
     });
     setSaving(false);
 
@@ -278,6 +315,7 @@ function NewUserForm() {
     setEmail("");
     setPassword("");
     setRole("staff");
+    setSubcontractorId("");
     setSavedMessage(true);
     clearTimeout(savedTimer.current);
     savedTimer.current = setTimeout(() => setSavedMessage(false), 3000);
@@ -317,7 +355,11 @@ function NewUserForm() {
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Role</label>
         <select
           value={role}
-          onChange={(e) => setRole(e.target.value as Role)}
+          onChange={(e) => {
+            const newRole = e.target.value as Role;
+            setRole(newRole);
+            if (newRole !== "subcontractor") setSubcontractorId("");
+          }}
           className="w-full border border-line px-2 py-1.5 text-xs"
         >
           {ROLES.map((r) => (
@@ -327,6 +369,30 @@ function NewUserForm() {
           ))}
         </select>
       </div>
+
+      {role === "subcontractor" && (
+        <div>
+          <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Subcontractor Record</label>
+          <select
+            value={subcontractorId}
+            onChange={(e) => setSubcontractorId(e.target.value)}
+            className="w-full border border-line px-2 py-1.5 text-xs"
+          >
+            <option value="">—</option>
+            <option value={NEW_SUBCONTRACTOR_SENTINEL}>+ New subcontractor record</option>
+            {subcontractors.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[10px] text-ink/40">
+            {linkingNew
+              ? "A new subcontractor record will be created with this login's name."
+              : "Links this login to an existing subcontractor so hours/rates line up — without this, sign-in fails."}
+          </p>
+        </div>
+      )}
 
       <div className="col-span-2 sm:col-span-4">
         <button

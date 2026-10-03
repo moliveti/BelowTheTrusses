@@ -43,7 +43,7 @@ export const TABS: { key: Tab; label: string; description: string; Icon: (props:
   { key: "today", label: "Priorities", description: "What needs attention today", Icon: PriorityIcon },
   { key: "leads", label: "Quotes & Leads", description: "Intake, follow-up, and quote building", Icon: LeadsIcon },
   { key: "referrals", label: "Referral Sources", description: "Revenue by referral relationship", Icon: ReferralIcon },
-  { key: "contracted", label: "Hourly Cost of Contracted Work", description: "Subcontractor hours, cost, and billing status", Icon: ContractedIcon },
+  { key: "contracted", label: "Timesheets", description: "Subcontractor hours, cost, and billing status", Icon: ContractedIcon },
   { key: "productivity", label: "Productivity", description: "Hours logged by person", Icon: ProductivityIcon },
   { key: "projects", label: "Projects", description: "All projects and billing status", Icon: ProjectsIcon },
   { key: "clients", label: "Clients", description: "Clients and the projects nested under them", Icon: ClientsIcon },

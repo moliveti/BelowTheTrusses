@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type {
   Assignment,
+  MyAssignedProject,
   ProjectOption,
   ProjectTypeName,
   SubcontractorOption,
@@ -16,11 +17,14 @@ export async function getMySubcontractorProfile(): Promise<SubcontractorProfile 
   return data;
 }
 
-export async function getMyAssignedProjects(): Promise<ProjectOption[]> {
+export async function getMyAssignedProjects(): Promise<MyAssignedProject[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("my_assigned_projects").select("id, name, type").order("name");
+  const { data, error } = await supabase
+    .from("my_assigned_projects")
+    .select("id, name, type, allocated_hours")
+    .order("name");
   if (error) throw new Error(`my_assigned_projects: ${error.message}`);
-  return data ?? [];
+  return (data ?? []).map((p) => ({ id: p.id, name: p.name, type: p.type, allocatedHours: p.allocated_hours }));
 }
 
 export async function getMyTimeEntries(subcontractorId: string): Promise<TimeEntry[]> {

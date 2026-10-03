@@ -25,6 +25,17 @@ function yearOf(r: PaymentRow): string {
   return r.dueDate ? r.dueDate.slice(0, 4) : NO_DUE_DATE;
 }
 
+// Current year first, then the rest oldest-to-newest (so past years lead
+// into future years, which trail off at the bottom); "No Due Date" always
+// last.
+function compareYears(a: string, b: string, currentYear: string): number {
+  if (a === NO_DUE_DATE) return 1;
+  if (b === NO_DUE_DATE) return -1;
+  if (a === currentYear) return -1;
+  if (b === currentYear) return 1;
+  return a.localeCompare(b);
+}
+
 export function PaymentScheduleTable({ payments }: { payments: PaymentRow[] }) {
   const [rows, setRows] = useState(payments);
   const [search, setSearch] = useState("");
@@ -33,10 +44,12 @@ export function PaymentScheduleTable({ payments }: { payments: PaymentRow[] }) {
   const [yearFilter, setYearFilter] = useState<string>("all");
   const fieldStatus = useFieldStatus();
 
+  const currentYear = String(new Date().getFullYear());
+
   const years = useMemo(() => {
     const set = new Set(rows.map(yearOf).filter((y) => y !== NO_DUE_DATE));
-    return Array.from(set).sort((a, b) => b.localeCompare(a));
-  }, [rows]);
+    return Array.from(set).sort((a, b) => compareYears(a, b, currentYear));
+  }, [rows, currentYear]);
 
   // Search/project-status/year narrow what's in view entirely; the Due/Paid
   // toggle only hides rows from the table below -- summary tiles stay on
@@ -54,6 +67,22 @@ export function PaymentScheduleTable({ payments }: { payments: PaymentRow[] }) {
       }),
     [rows, search, activeFilter, yearFilter]
   );
+
+  // The summary tiles always show All Time + current-year (YTD) side by
+  // side, independent of the Year pill above (which only scopes the table) --
+  // search/project-status still narrow them the same way "scoped" does.
+  const allTimeRows = useMemo(
+    () =>
+      rows.filter((r) => {
+        const q = search.toLowerCase();
+        return (
+          (q === "" || r.projectName.toLowerCase().includes(q) || r.clientName.toLowerCase().includes(q)) &&
+          (activeFilter === "all" || (activeFilter === "active") === r.projectActive)
+        );
+      }),
+    [rows, search, activeFilter]
+  );
+  const ytdRows = useMemo(() => allTimeRows.filter((r) => yearOf(r) === currentYear), [allTimeRows, currentYear]);
 
   const tableRows = useMemo(
     () =>
@@ -75,13 +104,9 @@ export function PaymentScheduleTable({ payments }: { payments: PaymentRow[] }) {
     for (const list of map.values()) {
       list.sort((a, b) => (a.dueDate ?? "9999-99").localeCompare(b.dueDate ?? "9999-99"));
     }
-    const sortedYears = Array.from(map.keys()).sort((a, b) => {
-      if (a === NO_DUE_DATE) return 1;
-      if (b === NO_DUE_DATE) return -1;
-      return b.localeCompare(a);
-    });
+    const sortedYears = Array.from(map.keys()).sort((a, b) => compareYears(a, b, currentYear));
     return sortedYears.map((year) => ({ year, rows: map.get(year)! }));
-  }, [tableRows]);
+  }, [tableRows, currentYear]);
 
   function patchRow(id: string, patch: Partial<PaymentRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -132,9 +157,12 @@ export function PaymentScheduleTable({ payments }: { payments: PaymentRow[] }) {
     if (ok) patchRow(r.id, { paidDate: today, amountPaid: amount, status: "Paid" });
   }
 
-  const totalDue = scoped.reduce((s, r) => s + (r.amountDue ?? 0), 0);
-  const totalPaid = scoped.reduce((s, r) => s + (r.amountPaid ?? 0), 0);
-  const totalPending = scoped.reduce((s, r) => s + pendingAmount(r), 0);
+  const allTimeDue = allTimeRows.reduce((s, r) => s + (r.amountDue ?? 0), 0);
+  const allTimePaid = allTimeRows.reduce((s, r) => s + (r.amountPaid ?? 0), 0);
+  const allTimePending = allTimeRows.reduce((s, r) => s + pendingAmount(r), 0);
+  const ytdDue = ytdRows.reduce((s, r) => s + (r.amountDue ?? 0), 0);
+  const ytdPaid = ytdRows.reduce((s, r) => s + (r.amountPaid ?? 0), 0);
+  const ytdPending = ytdRows.reduce((s, r) => s + pendingAmount(r), 0);
 
   return (
     <div>
@@ -193,9 +221,15 @@ export function PaymentScheduleTable({ payments }: { payments: PaymentRow[] }) {
       </div>
 
       <div className="mb-6 grid grid-cols-3 gap-4">
-        <SummaryStat label={`Total Due${yearFilter !== "all" ? ` (${yearFilter})` : ""}`} value={fmtUsd(totalDue)} />
-        <SummaryStat label="Total Paid" value={fmtUsd(totalPaid)} />
-        <SummaryStat label="Total Pending" value={fmtUsd(totalPending)} accent={totalPending > 0} />
+        <SummaryStat label="Total Revenue" allTime={fmtUsd(allTimeDue)} ytd={fmtUsd(ytdDue)} ytdYear={currentYear} />
+        <SummaryStat label="Total Paid" allTime={fmtUsd(allTimePaid)} ytd={fmtUsd(ytdPaid)} ytdYear={currentYear} />
+        <SummaryStat
+          label="Total Pending"
+          allTime={fmtUsd(allTimePending)}
+          ytd={fmtUsd(ytdPending)}
+          ytdYear={currentYear}
+          accent={allTimePending > 0}
+        />
       </div>
 
       {grouped.length === 0 ? (
@@ -330,11 +364,31 @@ function PillButton({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
-function SummaryStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function SummaryStat({
+  label,
+  allTime,
+  ytd,
+  ytdYear,
+  accent,
+}: {
+  label: string;
+  allTime: string;
+  ytd: string;
+  ytdYear: string;
+  accent?: boolean;
+}) {
+  const valueClass = accent ? "text-warning" : "text-ink";
   return (
     <div className="border border-line border-t-2 border-t-brand-accent bg-surface p-4">
-      <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{label}</div>
-      <div className={`font-mono text-lg tabular-nums ${accent ? "text-warning" : "text-ink"}`}>{value}</div>
+      <div className="mb-2 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{label}</div>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="font-mono text-[10px] uppercase tracking-wide text-ink/40">All Time (Since 2024)</span>
+        <span className={`font-mono text-lg tabular-nums ${valueClass}`}>{allTime}</span>
+      </div>
+      <div className="mt-1.5 flex items-baseline justify-between gap-3 border-t border-line pt-1.5">
+        <span className="font-mono text-[10px] uppercase tracking-wide text-ink/40">YTD ({ytdYear})</span>
+        <span className={`font-mono text-lg tabular-nums ${valueClass}`}>{ytd}</span>
+      </div>
     </div>
   );
 }

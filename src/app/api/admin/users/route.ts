@@ -17,6 +17,10 @@ export async function POST(request: Request) {
   const password = typeof body.password === "string" ? body.password : "";
   const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
   const newRole = body.role as Role;
+  // Only meaningful when newRole === "subcontractor": an existing
+  // subcontractors.id to link this login to, or "" to insert a new
+  // subcontractors row for them instead.
+  const subcontractorId = typeof body.subcontractorId === "string" ? body.subcontractorId : "";
 
   if (!email || !password) {
     return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
@@ -46,6 +50,28 @@ export async function POST(request: Request) {
     const { error: roleError } = await admin.from("profiles").update({ role: newRole }).eq("id", data.user.id);
     if (roleError) {
       return NextResponse.json({ error: roleError.message }, { status: 500 });
+    }
+  }
+
+  // A subcontractor login is useless without being linked to the
+  // subcontractors row the rest of the app (rates, hours, the
+  // my_subcontractor view) actually keys off.
+  if (newRole === "subcontractor") {
+    if (subcontractorId) {
+      const { error: linkError } = await admin
+        .from("subcontractors")
+        .update({ user_id: data.user.id })
+        .eq("id", subcontractorId);
+      if (linkError) {
+        return NextResponse.json({ error: linkError.message }, { status: 500 });
+      }
+    } else {
+      const { error: subError } = await admin
+        .from("subcontractors")
+        .insert({ name: fullName || email, user_id: data.user.id });
+      if (subError) {
+        return NextResponse.json({ error: subError.message }, { status: 500 });
+      }
     }
   }
 

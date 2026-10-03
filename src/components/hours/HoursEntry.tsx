@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { ProjectOption, SubcontractorProfile, TimeEntry } from "@/lib/hours/types";
+import type { MyAssignedProject, SubcontractorProfile, TimeEntry } from "@/lib/hours/types";
 import { endOfWeek, fmtShortDate, startOfWeek, toIsoDate } from "@/lib/hours/dates";
+import { BurndownBar } from "@/components/BurndownBar";
 
 export function HoursEntry({
   subcontractor,
@@ -11,7 +12,7 @@ export function HoursEntry({
   initialEntries,
 }: {
   subcontractor: SubcontractorProfile;
-  projects: ProjectOption[];
+  projects: MyAssignedProject[];
   initialEntries: TimeEntry[];
 }) {
   const [entries, setEntries] = useState(initialEntries);
@@ -34,6 +35,27 @@ export function HoursEntry({
   );
   const earlier = useMemo(() => entries.filter((e) => e.workDate < weekStartIso), [entries, weekStartIso]);
   const weekTotal = thisWeek.reduce((s, e) => s + e.hours, 0);
+
+  // Per-project rollup: committed (allocated) hours vs. what's actually
+  // been logged, split by whether it's been paid out yet -- "available
+  // hours" the subcontractor can see is allocated minus everything logged,
+  // paid or not, since pending hours still count against the budget.
+  const projectSummaries = useMemo(
+    () =>
+      projects.map((p) => {
+        const projectEntries = entries.filter((e) => e.projectId === p.id);
+        const paidHours = projectEntries.filter((e) => e.paidAt !== null).reduce((s, e) => s + e.hours, 0);
+        const pendingHours = projectEntries.filter((e) => e.paidAt === null).reduce((s, e) => s + e.hours, 0);
+        return {
+          projectId: p.id,
+          projectName: p.name,
+          allocatedHours: p.allocatedHours,
+          paidHours,
+          pendingHours,
+        };
+      }),
+    [projects, entries]
+  );
 
   async function addEntry(e: React.FormEvent) {
     e.preventDefault();
@@ -99,6 +121,42 @@ export function HoursEntry({
   return (
     <div className="mx-auto max-w-2xl">
       <p className="mb-6 text-xs text-ink/60">Logging hours as {subcontractor.name}</p>
+
+      <div className="mb-8">
+        <h2 className="mb-3 border-b-[1.5px] border-ink pb-2 text-base text-ink">My Projects</h2>
+        {projectSummaries.length === 0 ? (
+          <div className="border border-line bg-surface p-4 text-sm text-ink/50">No projects assigned yet.</div>
+        ) : (
+          <div className="overflow-x-auto border border-line bg-surface">
+            <table className="w-full min-w-[560px] border-collapse text-[13px]">
+              <thead>
+                <tr className="border-b-2 border-ink">
+                  <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Project</th>
+                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Committed</th>
+                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Paid</th>
+                  <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Pending</th>
+                  <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Remaining</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projectSummaries.map((s) => (
+                  <tr key={s.projectId} className="border-b border-line last:border-b-0">
+                    <td className="px-3 py-2">{s.projectName}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">
+                      {s.allocatedHours !== null ? s.allocatedHours.toFixed(1) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{s.paidHours.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{s.pendingHours.toFixed(1)}</td>
+                    <td className="px-3 py-2">
+                      <BurndownBar logged={s.paidHours + s.pendingHours} allocated={s.allocatedHours} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div className="mb-8 border border-line bg-surface p-5">
         <h2 className="mb-4 text-base text-ink">Log time</h2>
@@ -168,7 +226,7 @@ export function HoursEntry({
           <h2 className="text-base text-ink">This Week</h2>
           <span className="font-mono text-xs tabular-nums text-ink/60">{weekTotal.toFixed(2)} hrs total</span>
         </div>
-        <EntryTable entries={thisWeek} onDelete={deleteEntry} emptyLabel="No entries logged this week yet." />
+        <EntryTable entries={thisWeek} projects={projects} onDelete={deleteEntry} emptyLabel="No entries logged this week yet." />
       </div>
 
       <div>
@@ -178,7 +236,7 @@ export function HoursEntry({
         >
           {showEarlier ? "Hide earlier entries" : `Show earlier entries (${earlier.length})`}
         </button>
-        {showEarlier && <EntryTable entries={earlier} onDelete={deleteEntry} emptyLabel="No earlier entries." />}
+        {showEarlier && <EntryTable entries={earlier} projects={projects} onDelete={deleteEntry} emptyLabel="No earlier entries." />}
       </div>
     </div>
   );
@@ -186,16 +244,23 @@ export function HoursEntry({
 
 function EntryTable({
   entries,
+  projects,
   onDelete,
   emptyLabel,
 }: {
   entries: TimeEntry[];
+  projects: MyAssignedProject[];
   onDelete: (id: string) => void;
   emptyLabel: string;
 }) {
   if (entries.length === 0) {
     return <div className="border border-line bg-surface p-4 text-sm text-ink/50">{emptyLabel}</div>;
   }
+  // The server-side join behind TimeEntry.projectName can't resolve for a
+  // subcontractor's own entries (RLS on `projects` is owner/staff-only, by
+  // design -- it carries financial columns) -- the project list fetched
+  // for this page is already safely scoped, so prefer it.
+  const nameById = new Map(projects.map((p) => [p.id, p.name]));
   return (
     <div className="overflow-x-auto border border-line bg-surface">
       <table className="w-full min-w-[520px] border-collapse text-[13px]">
@@ -212,7 +277,7 @@ function EntryTable({
           {entries.map((e) => (
             <tr key={e.id} className="border-b border-line hover:bg-canvas">
               <td className="px-3 py-2 font-mono">{fmtShortDate(e.workDate)}</td>
-              <td className="px-3 py-2">{e.projectName}</td>
+              <td className="px-3 py-2">{nameById.get(e.projectId) ?? e.projectName}</td>
               <td className="px-3 py-2 text-right font-mono tabular-nums">{e.hours.toFixed(2)}</td>
               <td className="px-3 py-2">{e.workDescription}</td>
               <td className="px-3 py-2 text-right">

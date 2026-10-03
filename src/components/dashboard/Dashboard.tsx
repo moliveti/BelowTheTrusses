@@ -184,7 +184,13 @@ export function Dashboard({
       {tab === "payments" && <PaymentScheduleTable payments={payments} />}
       {tab === "sow" && <SowTab rows={data.sow} />}
       {tab === "team" && role === "owner" && (
-        <TeamTab team={team} backupHistory={backupHistory} currentBackupCycle={currentBackupCycle} marketIntelRun={marketIntelRun} />
+        <TeamTab
+          team={team}
+          subcontractors={contractedWork.subcontractors}
+          backupHistory={backupHistory}
+          currentBackupCycle={currentBackupCycle}
+          marketIntelRun={marketIntelRun}
+        />
       )}
     </AppShell>
   );

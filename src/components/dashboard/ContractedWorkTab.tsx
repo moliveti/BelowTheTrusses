@@ -7,6 +7,7 @@ import { endOfWeek, fmtShortDate, startOfWeek, toIsoDate } from "@/lib/hours/dat
 import { buildCostRows } from "@/lib/hours/cost";
 import { effectiveRate } from "@/lib/hours/rates";
 import { fmtUsd } from "@/lib/dashboard/format";
+import { BurndownBar } from "@/components/BurndownBar";
 import { RateSettings } from "./RateSettings";
 
 type StatusFilter = "all" | "pending" | "paid";
@@ -216,12 +217,11 @@ export function ContractedWorkTab({
     return null;
   }
 
-  // "assignments" sub-tab is hidden for now (not currently useful) but the
-  // tab/content logic below is left in place in case it's wanted again.
   const SUB_TABS: { key: typeof subTab; label: string }[] = [
     { key: "overview", label: "Overview" },
     { key: "time", label: "Time Input" },
     { key: "rates", label: "Contractor Hourly Rate Setup" },
+    { key: "assignments", label: "Project Assignments" },
   ];
 
   const pendingCount = filtered.filter((e) => !isPaid(e)).length;
@@ -229,7 +229,7 @@ export function ContractedWorkTab({
   return (
     <div>
       <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
-        <h2 className="text-lg font-normal">Hourly Cost of Contracted Work</h2>
+        <h2 className="text-lg font-normal">Timesheets</h2>
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Hours &amp; Invoicing</span>
       </div>
 
@@ -1110,25 +1110,3 @@ function AssignmentManager({
   );
 }
 
-function BurndownBar({ logged, allocated }: { logged: number; allocated: number | null }) {
-  if (allocated === null) {
-    return <div className="font-mono text-[10.5px] text-ink/40">{logged.toFixed(1)} hrs logged · no allocation set</div>;
-  }
-  const pct = allocated > 0 ? Math.min(100, (logged / allocated) * 100) : 100;
-  const over = logged > allocated;
-  const remaining = allocated - logged;
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-40 max-w-[40vw] overflow-hidden bg-line">
-        <div
-          className={`h-full ${over ? "bg-warning" : "bg-brand-accent"}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className={`font-mono text-[10.5px] ${over ? "text-warning" : "text-ink/50"}`}>
-        {logged.toFixed(1)} / {allocated.toFixed(1)} hrs
-        {over ? ` · ${Math.abs(remaining).toFixed(1)} over` : ` · ${remaining.toFixed(1)} left`}
-      </span>
-    </div>
-  );
-}

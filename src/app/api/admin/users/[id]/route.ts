@@ -61,5 +61,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
+  if (typeof body.fullName === "string") {
+    const fullName = body.fullName.trim();
+    const { error } = await admin.from("profiles").update({ full_name: fullName || null }).eq("id", id);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }
