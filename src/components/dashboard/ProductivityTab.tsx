@@ -65,10 +65,28 @@ function CostPerHourDashboard({ entries }: { entries: TimeEntry[] }) {
   const blendedRate = totalHours > 0 ? totalCost / totalHours : null;
   const hasUnknownRate = entries.some((e) => e.hourlyRate === null);
 
+  const currentYear = new Date().getFullYear();
+  const ytdEntries = useMemo(() => entries.filter((e) => e.workDate.slice(0, 4) === String(currentYear)), [entries, currentYear]);
+  const paidHours = (rows: TimeEntry[]) => rows.filter((e) => e.paidAt !== null).reduce((s, e) => s + e.hours, 0);
+  const unpaidHours = (rows: TimeEntry[]) => rows.filter((e) => e.paidAt === null).reduce((s, e) => s + e.hours, 0);
+  const allTimePaid = paidHours(entries);
+  const allTimeUnpaid = unpaidHours(entries);
+  const ytdPaid = paidHours(ytdEntries);
+  const ytdUnpaid = unpaidHours(ytdEntries);
+  const ytdTotal = ytdPaid + ytdUnpaid;
+
   return (
     <div>
       <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label="Total Hours" value={fmtHours(totalHours)} />
+        <TotalHoursStat
+          allTime={totalHours}
+          allTimePaid={allTimePaid}
+          allTimeUnpaid={allTimeUnpaid}
+          ytd={ytdTotal}
+          ytdPaid={ytdPaid}
+          ytdUnpaid={ytdUnpaid}
+          ytdYear={currentYear}
+        />
         <Stat label="Total Cost" value={fmtCost(totalCost)} flag={hasUnknownRate} />
         <Stat label="Blended $/hr" value={fmtRate(blendedRate)} />
         <Stat label="Projects Staffed" value={String(byProject.length)} />
@@ -170,6 +188,46 @@ function Stat({ label, value, flag }: { label: string; value: string; flag?: boo
       <div className="font-mono text-lg tabular-nums text-ink">
         {value}
         {flag && <span className="ml-1 text-warning">*</span>}
+      </div>
+    </div>
+  );
+}
+
+function TotalHoursStat({
+  allTime,
+  allTimePaid,
+  allTimeUnpaid,
+  ytd,
+  ytdPaid,
+  ytdUnpaid,
+  ytdYear,
+}: {
+  allTime: number;
+  allTimePaid: number;
+  allTimeUnpaid: number;
+  ytd: number;
+  ytdPaid: number;
+  ytdUnpaid: number;
+  ytdYear: number;
+}) {
+  return (
+    <div className="border border-line border-t-2 border-t-brand-accent bg-surface p-4">
+      <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Total Hours</div>
+
+      <div className="flex items-baseline justify-between">
+        <span className="font-mono text-[10px] uppercase tracking-wide text-ink/40">All Time</span>
+        <span className="font-mono text-lg tabular-nums text-ink">{fmtHours(allTime)}</span>
+      </div>
+      <div className="font-mono text-[10.5px] text-ink/50">
+        {fmtHours(allTimePaid)} paid · {fmtHours(allTimeUnpaid)} unpaid
+      </div>
+
+      <div className="mt-1.5 flex items-baseline justify-between border-t border-line pt-1.5">
+        <span className="font-mono text-[10px] uppercase tracking-wide text-ink/40">YTD ({ytdYear})</span>
+        <span className="font-mono text-lg tabular-nums text-ink">{fmtHours(ytd)}</span>
+      </div>
+      <div className="font-mono text-[10.5px] text-ink/50">
+        {fmtHours(ytdPaid)} paid · {fmtHours(ytdUnpaid)} unpaid
       </div>
     </div>
   );

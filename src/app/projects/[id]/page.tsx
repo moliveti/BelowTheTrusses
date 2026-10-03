@@ -11,9 +11,7 @@ import { MilestoneSection } from "@/components/projects/MilestoneSection";
 import { ScopeSection } from "@/components/projects/ScopeSection";
 import { ProjectStatusActions } from "@/components/projects/ProjectStatusActions";
 import { HoursCostSection } from "@/components/projects/HoursCostSection";
-import { fmtUsd } from "@/lib/dashboard/format";
-
-const fmtDate = (d: string | null) => d ?? "—";
+import { BillingSection } from "@/components/projects/BillingSection";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -73,24 +71,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">
           Billing
         </h3>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 border border-line bg-surface p-4 text-sm sm:grid-cols-3">
-          <Field label="Billing Method" value={project.billingMethod ?? "—"} />
-          <Field label="Contract Signed" value={fmtDate(project.contractSignedDate)} />
-          <Field label="Hourly Rate" value={project.hourlyRate !== null ? fmtUsd(project.hourlyRate) + "/hr" : "—"} />
-          <Field label="Fixed Fee" value={project.fixedFeeAmount !== null ? fmtUsd(project.fixedFeeAmount) : "—"} />
-          <Field
-            label="Add-on Hours"
-            value={project.addonHours !== null ? `${project.addonHours} hrs @ ${fmtUsd(project.addonHourlyRate ?? 0)}/hr` : "—"}
-          />
-          <Field
-            label="Furniture Commission"
-            value={
-              project.furnitureCommissionRate !== null
-                ? `${(project.furnitureCommissionRate * 100).toFixed(0)}% (reference only)`
-                : "—"
-            }
-          />
-        </div>
+        <BillingSection
+          projectId={project.id}
+          billingMethod={project.billingMethod}
+          hourlyRate={project.hourlyRate}
+          fixedFeeAmount={project.fixedFeeAmount}
+          contractSignedDate={project.contractSignedDate}
+          addonHours={project.addonHours}
+          addonHourlyRate={project.addonHourlyRate}
+          furnitureCommissionRate={project.furnitureCommissionRate}
+        />
       </section>
 
       <section className="mb-8">
@@ -127,14 +117,5 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <HoursCostSection hoursByPerson={project.hoursByPerson} />
       )}
     </AppShell>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="font-mono text-[10px] uppercase tracking-wide text-ink/50">{label}</div>
-      <div className="text-ink">{value}</div>
-    </div>
   );
 }
