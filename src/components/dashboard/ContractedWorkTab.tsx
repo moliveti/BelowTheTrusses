@@ -322,15 +322,19 @@ export function ContractedWorkTab({
             )}
           </section>
 
-          <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <section className="mb-10">
             <CostBySubcontractor
               rows={subBreakdowns}
               expandedId={expandedSubId}
               onToggle={(id) => setExpandedSubId((prev) => (prev === id ? null : id))}
               onMarkPaid={markPaid}
             />
+          </section>
+
+          <section className="mb-10">
             <CostByProject
               rows={projBreakdowns}
+              assignments={assignments}
               expandedId={expandedProjectId}
               onToggle={(id) => setExpandedProjectId((prev) => (prev === id ? null : id))}
               onMarkPaid={markPaid}
@@ -527,122 +531,166 @@ function CostBySubcontractor({
   );
 }
 
+/** Sum of every contractor's committed hours on a project — null (shown as
+ * "—") only when none of them have an allocation set at all, so a
+ * genuinely-unplanned project doesn't read as "0 allocated". */
+function projectAllocatedHours(projectId: string, assignments: Assignment[]): number | null {
+  const set = assignments.filter((a) => a.projectId === projectId && a.allocatedHours !== null);
+  if (set.length === 0) return null;
+  return set.reduce((s, a) => s + (a.allocatedHours ?? 0), 0);
+}
+
+function pairAllocatedHours(projectId: string, subcontractorId: string, assignments: Assignment[]): number | null {
+  return assignments.find((a) => a.projectId === projectId && a.subcontractorId === subcontractorId)?.allocatedHours ?? null;
+}
+
 function CostByProject({
   rows,
+  assignments,
   expandedId,
   onToggle,
   onMarkPaid,
 }: {
   rows: ProjectBreakdown[];
+  assignments: Assignment[];
   expandedId: string | null;
   onToggle: (id: string) => void;
   onMarkPaid: (entryIds: string[]) => void;
 }) {
   return (
     <div>
-      <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Cost by Project</h3>
+      <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">
+        Hours &amp; Cost by Project — Allocated, Worked, Paid/Unpaid
+      </h3>
       <div className="overflow-x-auto border border-line bg-surface">
-        <table className="w-full border-collapse text-[13px]">
+        <table className="w-full min-w-[900px] border-collapse text-[13px]">
           <thead>
             <tr className="border-b-2 border-ink">
               <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Project</th>
-              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Hours</th>
-              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Paid</th>
-              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Pending</th>
+              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Allocated</th>
+              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Worked</th>
+              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Paid Hrs</th>
+              <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Unpaid Hrs</th>
+              <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Remaining</th>
               <th className="px-3 py-2 text-right font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Cost</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-4 text-center text-sm text-ink/50">
+                <td colSpan={7} className="px-3 py-4 text-center text-sm text-ink/50">
                   No hours match the current filters.
                 </td>
               </tr>
             ) : (
-              rows.map((r) => (
-                <>
-                  <tr
-                    key={r.projectId}
-                    onClick={() => onToggle(r.projectId)}
-                    className="cursor-pointer border-b border-line hover:bg-canvas"
-                  >
-                    <td className="px-3 py-2">
-                      <span className="mr-1.5 inline-block w-3 text-[10px] text-ink/40">
-                        {expandedId === r.projectId ? "▼" : "▶"}
-                      </span>
-                      {r.projectName}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{r.hours.toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-positive">{fmtUsd(r.paidCost)}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{fmtUsd(r.pendingCost)}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">
-                      {fmtUsd(r.cost)}
-                      {r.hasUnknownRate && <span className="ml-1 text-warning">*</span>}
-                    </td>
-                  </tr>
-                  {expandedId === r.projectId && (
-                    <tr key={`${r.projectId}-detail`} className="border-b border-line bg-canvas">
-                      <td colSpan={5} className="p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="font-mono text-[10px] uppercase tracking-wide text-ink/50">By Contractor</span>
-                          {r.pendingEntryIds.length > 0 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onMarkPaid(r.pendingEntryIds);
-                              }}
-                              className="font-mono text-[10.5px] uppercase text-positive underline underline-offset-2"
-                            >
-                              Mark All Pending Paid
-                            </button>
-                          )}
-                        </div>
-                        <table className="w-full border-collapse text-xs">
-                          <thead>
-                            <tr className="border-b border-line">
-                              <th className="px-2 py-1 text-left font-mono text-[9.5px] uppercase text-ink/40">Contractor</th>
-                              <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Hours</th>
-                              <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Paid $</th>
-                              <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Pending $</th>
-                              <th className="px-2 py-1" />
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {r.byContractor
-                              .sort((a, b) => b.cost - a.cost)
-                              .map((s) => (
-                                <tr key={s.subcontractorId} className="border-b border-line last:border-b-0">
-                                  <td className="px-2 py-1">{s.subcontractorName}</td>
-                                  <td className="px-2 py-1 text-right font-mono tabular-nums">{s.hours.toFixed(2)}</td>
-                                  <td className="px-2 py-1 text-right font-mono tabular-nums text-positive">{fmtUsd(s.paidCost)}</td>
-                                  <td className="px-2 py-1 text-right font-mono tabular-nums">{fmtUsd(s.pendingCost)}</td>
-                                  <td className="px-2 py-1 text-right">
-                                    {s.pendingEntryIds.length > 0 && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onMarkPaid(s.pendingEntryIds);
-                                        }}
-                                        className="font-mono text-[9.5px] uppercase text-positive underline underline-offset-2"
-                                      >
-                                        Mark Paid
-                                      </button>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                          </tbody>
-                        </table>
+              rows.map((r) => {
+                const allocated = projectAllocatedHours(r.projectId, assignments);
+                return (
+                  <>
+                    <tr
+                      key={r.projectId}
+                      onClick={() => onToggle(r.projectId)}
+                      className="cursor-pointer border-b border-line hover:bg-canvas"
+                    >
+                      <td className="px-3 py-2">
+                        <span className="mr-1.5 inline-block w-3 text-[10px] text-ink/40">
+                          {expandedId === r.projectId ? "▼" : "▶"}
+                        </span>
+                        {r.projectName}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">{allocated !== null ? allocated.toFixed(1) : "—"}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">{r.hours.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">{r.paidHours.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">{r.pendingHours.toFixed(2)}</td>
+                      <td className="px-3 py-2">
+                        <BurndownBar logged={r.hours} allocated={allocated} />
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">
+                        {fmtUsd(r.cost)}
+                        {r.hasUnknownRate && <span className="ml-1 text-warning">*</span>}
                       </td>
                     </tr>
-                  )}
-                </>
-              ))
+                    {expandedId === r.projectId && (
+                      <tr key={`${r.projectId}-detail`} className="border-b border-line bg-canvas">
+                        <td colSpan={7} className="p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="font-mono text-[10px] uppercase tracking-wide text-ink/50">By Contractor</span>
+                            {r.pendingEntryIds.length > 0 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onMarkPaid(r.pendingEntryIds);
+                                }}
+                                className="font-mono text-[10.5px] uppercase text-positive underline underline-offset-2"
+                              >
+                                Mark All Pending Paid
+                              </button>
+                            )}
+                          </div>
+                          <table className="w-full min-w-[760px] border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-line">
+                                <th className="px-2 py-1 text-left font-mono text-[9.5px] uppercase text-ink/40">Contractor</th>
+                                <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Allocated</th>
+                                <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Worked</th>
+                                <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Paid Hrs</th>
+                                <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Unpaid Hrs</th>
+                                <th className="px-2 py-1 text-left font-mono text-[9.5px] uppercase text-ink/40">Remaining</th>
+                                <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Paid $</th>
+                                <th className="px-2 py-1 text-right font-mono text-[9.5px] uppercase text-ink/40">Pending $</th>
+                                <th className="px-2 py-1" />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {r.byContractor
+                                .sort((a, b) => b.cost - a.cost)
+                                .map((s) => {
+                                  const pairAllocated = pairAllocatedHours(r.projectId, s.subcontractorId, assignments);
+                                  return (
+                                    <tr key={s.subcontractorId} className="border-b border-line last:border-b-0">
+                                      <td className="px-2 py-1">{s.subcontractorName}</td>
+                                      <td className="px-2 py-1 text-right font-mono tabular-nums">
+                                        {pairAllocated !== null ? pairAllocated.toFixed(1) : "—"}
+                                      </td>
+                                      <td className="px-2 py-1 text-right font-mono tabular-nums">{s.hours.toFixed(2)}</td>
+                                      <td className="px-2 py-1 text-right font-mono tabular-nums">{s.paidHours.toFixed(2)}</td>
+                                      <td className="px-2 py-1 text-right font-mono tabular-nums">{s.pendingHours.toFixed(2)}</td>
+                                      <td className="px-2 py-1">
+                                        <BurndownBar logged={s.hours} allocated={pairAllocated} />
+                                      </td>
+                                      <td className="px-2 py-1 text-right font-mono tabular-nums text-positive">{fmtUsd(s.paidCost)}</td>
+                                      <td className="px-2 py-1 text-right font-mono tabular-nums">{fmtUsd(s.pendingCost)}</td>
+                                      <td className="px-2 py-1 text-right">
+                                        {s.pendingEntryIds.length > 0 && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onMarkPaid(s.pendingEntryIds);
+                                            }}
+                                            className="font-mono text-[9.5px] uppercase text-positive underline underline-offset-2"
+                                          >
+                                            Mark Paid
+                                          </button>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
+      <p className="mt-1.5 text-[11px] text-ink/40">
+        Allocated hours are set per subcontractor per project in Project Assignments.
+      </p>
     </div>
   );
 }
