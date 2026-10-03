@@ -9,6 +9,7 @@ import {
   ClientsIcon,
   ContractedIcon,
   LeadsIcon,
+  PaymentsIcon,
   PriorityIcon,
   ProductivityIcon,
   ProjectsIcon,
@@ -28,6 +29,7 @@ export type Tab =
   | "productivity"
   | "projects"
   | "clients"
+  | "payments"
   | "sow"
   | "team";
 
@@ -45,6 +47,7 @@ export const TABS: { key: Tab; label: string; description: string; Icon: (props:
   { key: "productivity", label: "Productivity", description: "Hours logged by person", Icon: ProductivityIcon },
   { key: "projects", label: "Projects", description: "All projects and billing status", Icon: ProjectsIcon },
   { key: "clients", label: "Clients", description: "Clients and the projects nested under them", Icon: ClientsIcon },
+  { key: "payments", label: "Payment Schedules", description: "Every project's payments, sorted by due date", Icon: PaymentsIcon },
   { key: "sow", label: "Business Not Materialized", description: "Proposals that didn't convert", Icon: SowIcon },
   { key: "team", label: "Admin", description: "Users, access, and backups", Icon: TeamIcon },
 ];

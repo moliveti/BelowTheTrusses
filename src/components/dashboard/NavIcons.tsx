@@ -90,6 +90,16 @@ export function ClientsIcon({ className }: IconProps) {
   );
 }
 
+export function PaymentsIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="3" y="5" width="18" height="15" rx="1.5" />
+      <path d="M3 10h18" />
+      <path d="M8 14h2M8 17h5" />
+    </svg>
+  );
+}
+
 export function SowIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>

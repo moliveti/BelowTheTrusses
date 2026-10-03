@@ -9,6 +9,7 @@ import type { Lead } from "@/lib/leads/types";
 import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import type { SelectionCatalogItem } from "@/lib/quotes/types";
 import type { ClientListItem, ClientOption } from "@/lib/clients/types";
+import type { PaymentRow } from "@/lib/payments/types";
 import type { TeamMember } from "@/lib/admin/types";
 import type { Role } from "@/lib/profile";
 import type { RecommendationRow } from "@/lib/intelligence/queries";
@@ -27,6 +28,7 @@ import { TeamTab } from "./TeamTab";
 import { TodayTab } from "./TodayTab";
 import { ProjectsIndex } from "@/components/projects/ProjectsIndex";
 import { ClientsIndex } from "@/components/clients/ClientsIndex";
+import { PaymentScheduleTable } from "@/components/payments/PaymentScheduleTable";
 import { AppShell } from "@/components/AppShell";
 import { TAB_KEYS, type Tab } from "@/components/AppSidebar";
 
@@ -45,6 +47,7 @@ export function Dashboard({
   projects,
   clients,
   clientOptions,
+  payments,
   leads,
   milestoneTemplates,
   selectionCatalog,
@@ -65,6 +68,7 @@ export function Dashboard({
   projects: ProjectListItem[];
   clients: ClientListItem[];
   clientOptions: ClientOption[];
+  payments: PaymentRow[];
   leads: Lead[];
   milestoneTemplates: MilestoneTemplateGroup[];
   selectionCatalog: SelectionCatalogItem[];
@@ -177,6 +181,7 @@ export function Dashboard({
       {tab === "productivity" && <ProductivityTab entries={contractedWork.timeEntries} />}
       {tab === "projects" && <ProjectsIndex projects={projects} />}
       {tab === "clients" && <ClientsIndex clients={clients} />}
+      {tab === "payments" && <PaymentScheduleTable payments={payments} />}
       {tab === "sow" && <SowTab rows={data.sow} />}
       {tab === "team" && role === "owner" && (
         <TeamTab team={team} backupHistory={backupHistory} currentBackupCycle={currentBackupCycle} marketIntelRun={marketIntelRun} />
