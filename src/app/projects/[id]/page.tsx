@@ -12,6 +12,9 @@ import { ScopeSection } from "@/components/projects/ScopeSection";
 import { ProjectStatusActions } from "@/components/projects/ProjectStatusActions";
 import { HoursCostSection } from "@/components/projects/HoursCostSection";
 import { BillingSection } from "@/components/projects/BillingSection";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { ProjectNameEditor } from "@/components/projects/ProjectNameEditor";
+import { DeleteProjectSection } from "@/components/projects/DeleteProjectSection";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -47,7 +50,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     <AppShell role={role} userEmail={user?.email} breadcrumb={breadcrumb}>
       <section className="mb-8">
         <div className="mb-2 flex flex-wrap items-baseline gap-3">
-          <h2 className="text-xl text-ink">{project.name}</h2>
+          {canBuildQuotes(role) ? (
+            <ProjectNameEditor projectId={project.id} initialName={project.name} />
+          ) : (
+            <h2 className="text-xl text-ink">{project.name}</h2>
+          )}
           <span className="font-mono text-xs uppercase text-ink/50">{project.type}</span>
           {project.active ? (
             <span className="font-mono text-[10px] uppercase text-positive">Active</span>
@@ -67,10 +74,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
       {canBuildQuotes(role) && <ProjectStatusActions project={project} quote={quote} contract={contract} />}
 
-      <section className="mb-8">
-        <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">
-          Billing
-        </h3>
+      <CollapsibleSection title="Billing">
         <BillingSection
           projectId={project.id}
           billingMethod={project.billingMethod}
@@ -81,12 +85,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           addonHourlyRate={project.addonHourlyRate}
           furnitureCommissionRate={project.furnitureCommissionRate}
         />
-      </section>
+      </CollapsibleSection>
 
-      <section className="mb-8">
-        <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">
-          Scope
-        </h3>
+      <CollapsibleSection title="Scope">
         <ScopeSection
           key={project.type}
           projectId={project.id}
@@ -94,7 +95,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           contractValue={project.contractValue}
           projectType={project.type}
         />
-      </section>
+      </CollapsibleSection>
 
       <MilestoneSection
         projectId={project.id}
@@ -107,15 +108,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       />
 
       {project.hoursByPerson.length === 0 ? (
-        <section>
-          <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">
-            Hours &amp; Cost
-          </h3>
+        <CollapsibleSection title="Hours & Cost">
           <div className="border border-line bg-surface p-4 text-sm text-ink/50">No hours logged on this project yet.</div>
-        </section>
+        </CollapsibleSection>
       ) : (
         <HoursCostSection hoursByPerson={project.hoursByPerson} />
       )}
+
+      {canBuildQuotes(role) && <DeleteProjectSection projectId={project.id} projectName={project.name} />}
     </AppShell>
   );
 }

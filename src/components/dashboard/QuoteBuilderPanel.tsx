@@ -54,6 +54,7 @@ export function QuoteBuilderPanel({
   // Leads pipeline). When a lead is passed, its own data is used as-is.
   const [name, setName] = useState(lead?.name ?? "");
   const [client, setClient] = useState<{ id: string | null; name: string }>({ id: null, name: lead?.name ?? "" });
+  const [projectName, setProjectName] = useState("");
   const [email, setEmail] = useState(lead?.email ?? "");
   const [phone, setPhone] = useState(lead?.phone ?? "");
   const [address, setAddress] = useState(lead?.address ?? "");
@@ -133,6 +134,35 @@ export function QuoteBuilderPanel({
     setSaving(true);
     const supabase = createClient();
 
+    // Resolve the client and check the project name up front, before a lead
+    // or project is created, so a name clash can't leave a half-built
+    // duplicate behind.
+    const clientResult = await resolveClientId(supabase, clients, client);
+    if ("error" in clientResult) {
+      setSaving(false);
+      setError(clientResult.error);
+      return;
+    }
+
+    const finalProjectName = projectName.trim() || (lead?.name ?? name.trim());
+    const nameClashMessage = `${client.name.trim()} already has a project named "${finalProjectName}". Enter a different project name.`;
+    const { data: clash, error: clashError } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("client_id", clientResult.id)
+      .eq("name", finalProjectName)
+      .limit(1);
+    if (clashError) {
+      setSaving(false);
+      setError(clashError.message);
+      return;
+    }
+    if (clash && clash.length > 0) {
+      setSaving(false);
+      setError(nameClashMessage);
+      return;
+    }
+
     let effectiveLead: Lead;
     if (lead) {
       effectiveLead = lead;
@@ -189,18 +219,11 @@ export function QuoteBuilderPanel({
       };
     }
 
-    const clientResult = await resolveClientId(supabase, clients, client);
-    if ("error" in clientResult) {
-      setSaving(false);
-      setError(clientResult.error);
-      return;
-    }
-
     const { data: project, error: projectError } = await supabase
       .from("projects")
       .insert({
         client_id: clientResult.id,
-        name: effectiveLead.name,
+        name: finalProjectName,
         type: projectType,
         state: effectiveLead.state,
         referral_source_id: effectiveLead.referralSourceId,
@@ -212,7 +235,7 @@ export function QuoteBuilderPanel({
       .single();
     if (projectError) {
       setSaving(false);
-      setError(projectError.message);
+      setError(projectError.code === "23505" ? nameClashMessage : projectError.message);
       return;
     }
 
@@ -400,8 +423,18 @@ export function QuoteBuilderPanel({
             </div>
           )}
 
-          <div className="max-w-xs">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <ClientPicker clients={clients} value={client} onChange={setClient} />
+            <div>
+              <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Project Name</label>
+              <input
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder={lead?.name ?? (name.trim() || "e.g. Smith Kitchen Remodel")}
+                className="w-full border border-line px-2 py-1.5 text-xs"
+              />
+              <p className="mt-1 text-[10px] text-ink/50">Leave blank to use the contact name. You can rename it later.</p>
+            </div>
           </div>
 
           <div>

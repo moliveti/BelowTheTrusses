@@ -7,6 +7,7 @@ import type { MilestoneRow } from "@/lib/projects/types";
 import { fmtUsd } from "@/lib/dashboard/format";
 import { useFieldStatus } from "@/hooks/useFieldStatus";
 import { FieldStatusBadge } from "@/components/FieldStatusBadge";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 const STATUSES = ["Pending", "Invoiced", "Paid", "Overdue"] as const;
 
@@ -170,10 +171,7 @@ export function MilestoneSection({
         <Stat label="Profitability" value={fmtUsd(profitability)} accent={profitability >= 0 ? "positive" : "warning"} />
       </section>
 
-      <section className="mb-8">
-        <h3 className="mb-3 border-b-[1.5px] border-ink pb-2 font-mono text-xs uppercase tracking-wide text-ink/60">
-          Milestones &amp; Payments
-        </h3>
+      <CollapsibleSection title="Milestones & Payments">
         {milestones.length === 0 ? (
           <div className="mb-4 border border-line bg-surface p-4 text-sm text-ink/50">No milestones recorded.</div>
         ) : (
@@ -279,7 +277,7 @@ export function MilestoneSection({
           </div>
         )}
         <AddMilestoneForm projectId={projectId} nextSequence={milestones.length + 1} onAdded={addMilestone} />
-      </section>
+      </CollapsibleSection>
 
       {showCloseModal && (
         <CloseBalanceModal

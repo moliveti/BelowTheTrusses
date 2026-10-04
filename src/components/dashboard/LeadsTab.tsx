@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead, LeadStatus } from "@/lib/leads/types";
 import type { ReferralSource } from "@/lib/dashboard/types";
@@ -13,8 +14,10 @@ import type { ClientOption } from "@/lib/clients/types";
 import type { Role } from "@/lib/profile";
 import { canBuildQuotes } from "@/lib/permissions";
 import { isValidBudgetRange, isValidEmail, isValidPhone } from "@/lib/validation";
+import { describeDeletion, type DeleteSummary } from "@/lib/records/delete";
 import { ProjectKickoffPanel } from "./ProjectKickoffPanel";
 import { QuoteBuilderPanel } from "./QuoteBuilderPanel";
+import { DeleteLeadDialog } from "./DeleteLeadDialog";
 
 const STATUSES: LeadStatus[] = [
   "New Prospect",
@@ -84,7 +87,10 @@ export function LeadsTab({
   quotesByLeadId: Record<string, string>;
   role: Role | null;
 }) {
+  const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
+  const [deleteTarget, setDeleteTarget] = useState<{ lead: Lead; mode: "lead" | "quote" } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [referralSources, setReferralSources] = useState(initialReferralSources);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [sortField, setSortField] = useState<SortField>("days");
@@ -111,6 +117,24 @@ export function LeadsTab({
 
   function patchLead(id: string, patch: Partial<Lead>) {
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  }
+
+  function handleDeleted(target: { lead: Lead; mode: "lead" | "quote" }, summary: DeleteSummary) {
+    const { lead, mode } = target;
+    if (mode === "lead") {
+      setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+      setExpandedId(null);
+    } else if (summary.leadReset) {
+      patchLead(lead.id, { status: "New Prospect", convertedProjectId: null, convertedSowId: null });
+    }
+    setQuotesByLeadId((prev) => {
+      const next = { ...prev };
+      delete next[lead.id];
+      return next;
+    });
+    setNotice(describeDeletion(mode === "lead" ? `Deleted lead "${lead.name}"` : `Deleted quote for "${lead.name}"`, summary));
+    setDeleteTarget(null);
+    router.refresh();
   }
 
   async function markContacted(id: string) {
@@ -171,6 +195,18 @@ export function LeadsTab({
         <h2 className="text-lg font-normal">Quotes &amp; Leads</h2>
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Intake, Follow-Up &amp; Quote Building</span>
       </div>
+
+      {notice && (
+        <div
+          role="status"
+          className="mb-4 flex items-start justify-between gap-3 border border-positive bg-positive/10 px-3 py-2 text-sm text-positive"
+        >
+          <span>✓ {notice}</span>
+          <button onClick={() => setNotice(null)} className="flex-shrink-0 font-mono text-[10px] uppercase underline underline-offset-2">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <section className="mb-10">
         <div className="mb-3 flex items-center justify-between">
@@ -289,6 +325,8 @@ export function LeadsTab({
                               onSourceCreated={handleSourceCreated}
                               canBuildQuote={canBuildQuotes(role)}
                               onBuildQuoteRequested={() => setQuoteTarget(lead)}
+                              hasQuote={Boolean(quotesByLeadId[lead.id])}
+                              onDeleteRequested={(mode) => setDeleteTarget({ lead, mode })}
                             />
                           </td>
                         </tr>
@@ -312,6 +350,15 @@ export function LeadsTab({
             patchLead(kickoffLead.id, { status: "Signed Contract", convertedProjectId: projectId });
             setKickoffLead(null);
           }}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteLeadDialog
+          lead={deleteTarget.lead}
+          mode={deleteTarget.mode}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={(summary) => handleDeleted(deleteTarget, summary)}
         />
       )}
 
@@ -804,6 +851,8 @@ function LeadEditPanel({
   onSourceCreated,
   canBuildQuote,
   onBuildQuoteRequested,
+  hasQuote,
+  onDeleteRequested,
 }: {
   lead: Lead;
   referralSources: ReferralSource[];
@@ -813,6 +862,8 @@ function LeadEditPanel({
   onSourceCreated: (source: ReferralSource) => void;
   canBuildQuote: boolean;
   onBuildQuoteRequested: () => void;
+  hasQuote: boolean;
+  onDeleteRequested: (mode: "lead" | "quote") => void;
 }) {
   const [statusError, setStatusError] = useState("");
   const [budgetError, setBudgetError] = useState("");
@@ -1069,6 +1120,22 @@ function LeadEditPanel({
             className="border border-ink px-3 py-1.5 font-mono text-[11px] uppercase text-ink hover:bg-canvas"
           >
             Build Quote
+          </button>
+        )}
+        {canBuildQuote && hasQuote && (
+          <button
+            onClick={() => onDeleteRequested("quote")}
+            className="border border-warning px-3 py-1.5 font-mono text-[11px] uppercase text-warning hover:bg-warning/10"
+          >
+            Delete Quote
+          </button>
+        )}
+        {canBuildQuote && (
+          <button
+            onClick={() => onDeleteRequested("lead")}
+            className="border border-warning px-3 py-1.5 font-mono text-[11px] uppercase text-warning hover:bg-warning/10"
+          >
+            Delete Lead
           </button>
         )}
         {lead.lastContactedDate && (

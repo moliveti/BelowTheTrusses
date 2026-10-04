@@ -43,6 +43,7 @@ export function ContractBuilderPanel({
   onCreated: (contractId: string) => void;
 }) {
   const [signedDate, setSignedDate] = useState(toIsoDate(new Date()));
+  const [projectName, setProjectName] = useState(project.name);
   const [templateVariant, setTemplateVariant] = useState<(typeof TYPES)[number]>(
     (project.type as (typeof TYPES)[number]) || "Residential"
   );
@@ -114,8 +115,25 @@ export function ContractBuilderPanel({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    const newName = projectName.trim();
+    if (!newName) return setError("Project name is required.");
     setSaving(true);
     const supabase = createClient();
+
+    // Rename first, on its own: a name clash should stop everything here
+    // rather than leave a contract and milestones behind from a failed submit.
+    if (newName !== project.name) {
+      const { error: renameError } = await supabase.from("projects").update({ name: newName }).eq("id", project.id);
+      if (renameError) {
+        setSaving(false);
+        setError(
+          renameError.code === "23505"
+            ? `${project.clientName} already has a project named "${newName}". Enter a different project name.`
+            : renameError.message
+        );
+        return;
+      }
+    }
 
     const { data: contract, error: contractError } = await supabase
       .from("contracts")
@@ -193,6 +211,16 @@ export function ContractBuilderPanel({
         </div>
 
         <form onSubmit={submit} className="space-y-4">
+          <div className="max-w-md">
+            <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Project Name</label>
+            <input
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              className="w-full border border-line px-2 py-1.5 text-xs"
+            />
+            <p className="mt-1 text-[10px] text-ink/50">This is the name that appears on the contract. Change it here if the quote name needs updating.</p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Signed Date</label>

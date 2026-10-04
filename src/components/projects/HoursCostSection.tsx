@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { ProjectHourRow } from "@/lib/projects/types";
 import { fmtUsd } from "@/lib/dashboard/format";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 type StatusFilter = "all" | "pending" | "paid";
 
@@ -25,20 +26,20 @@ export function HoursCostSection({ hoursByPerson }: { hoursByPerson: ProjectHour
     { hours: 0, cost: 0, paidCost: 0, pendingCost: 0 }
   );
 
+  const filterSelect = (
+    <select
+      value={statusFilter}
+      onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+      className="border border-line px-2 py-1 text-xs"
+    >
+      <option value="all">All billing status</option>
+      <option value="pending">Has pending</option>
+      <option value="paid">Has paid</option>
+    </select>
+  );
+
   return (
-    <section>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b-[1.5px] border-ink pb-2">
-        <h3 className="font-mono text-xs uppercase tracking-wide text-ink/60">Hours &amp; Cost</h3>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          className="border border-line px-2 py-1 text-xs"
-        >
-          <option value="all">All billing status</option>
-          <option value="pending">Has pending</option>
-          <option value="paid">Has paid</option>
-        </select>
-      </div>
+    <CollapsibleSection title="Hours & Cost" headerExtra={filterSelect}>
       {visible.length === 0 ? (
         <div className="border border-line bg-surface p-4 text-sm text-ink/50">No hours match the current filter.</div>
       ) : (
@@ -80,6 +81,6 @@ export function HoursCostSection({ hoursByPerson }: { hoursByPerson: ProjectHour
           </table>
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
