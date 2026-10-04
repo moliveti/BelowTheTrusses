@@ -15,6 +15,7 @@ import type { Role } from "@/lib/profile";
 import { canBuildQuotes } from "@/lib/permissions";
 import { isValidBudgetRange, isValidEmail, isValidPhone } from "@/lib/validation";
 import { describeDeletion, type DeleteSummary } from "@/lib/records/delete";
+import { markProjectSigned } from "@/lib/records/convert";
 import { ProjectKickoffPanel } from "./ProjectKickoffPanel";
 import { QuoteBuilderPanel } from "./QuoteBuilderPanel";
 import { DeleteLeadDialog } from "./DeleteLeadDialog";
@@ -90,7 +91,7 @@ export function LeadsTab({
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
   const [deleteTarget, setDeleteTarget] = useState<{ lead: Lead; mode: "lead" | "quote" } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; href?: string; linkLabel?: string } | null>(null);
   const [referralSources, setReferralSources] = useState(initialReferralSources);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [sortField, setSortField] = useState<SortField>("days");
@@ -132,8 +133,23 @@ export function LeadsTab({
       delete next[lead.id];
       return next;
     });
-    setNotice(describeDeletion(mode === "lead" ? `Deleted lead "${lead.name}"` : `Deleted quote for "${lead.name}"`, summary));
+    setNotice({
+      text: describeDeletion(mode === "lead" ? `Deleted lead "${lead.name}"` : `Deleted quote for "${lead.name}"`, summary),
+    });
     setDeleteTarget(null);
+    router.refresh();
+  }
+
+  // Signing turns the quote into a project in place: the lead drops out of the
+  // active list (it stays under "All statuses") and the project shows up on the
+  // Projects page, so nothing is created a second time.
+  function handleConverted(lead: Lead, projectId: string) {
+    setExpandedId(null);
+    setNotice({
+      text: `"${lead.name}" is signed and is now a project. It has left Quotes & Leads.`,
+      href: `/projects/${projectId}`,
+      linkLabel: "Open project",
+    });
     router.refresh();
   }
 
@@ -201,7 +217,14 @@ export function LeadsTab({
           role="status"
           className="mb-4 flex items-start justify-between gap-3 border border-positive bg-positive/10 px-3 py-2 text-sm text-positive"
         >
-          <span>✓ {notice}</span>
+          <span>
+            ✓ {notice.text}
+            {notice.href && (
+              <a href={notice.href} className="ml-2 font-mono text-[11px] uppercase underline underline-offset-2">
+                {notice.linkLabel ?? "Open"}
+              </a>
+            )}
+          </span>
           <button onClick={() => setNotice(null)} className="flex-shrink-0 font-mono text-[10px] uppercase underline underline-offset-2">
             Dismiss
           </button>
@@ -299,7 +322,16 @@ export function LeadsTab({
                           </span>
                         </td>
                         <td className={`px-3 py-2 font-mono text-xs ${s.label}`}>{days}d ago</td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="whitespace-nowrap px-3 py-2 text-right">
+                          {lead.convertedProjectId && (
+                            <a
+                              href={`/projects/${lead.convertedProjectId}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="mr-1.5 inline-block whitespace-nowrap border border-brand-primary px-2.5 py-1 font-mono text-[10px] uppercase text-brand-primary hover:bg-canvas"
+                            >
+                              Open Project
+                            </a>
+                          )}
                           {quotesByLeadId[lead.id] && (
                             <a
                               href={`/api/quotes/${quotesByLeadId[lead.id]}/pdf`}
@@ -327,6 +359,7 @@ export function LeadsTab({
                               onBuildQuoteRequested={() => setQuoteTarget(lead)}
                               hasQuote={Boolean(quotesByLeadId[lead.id])}
                               onDeleteRequested={(mode) => setDeleteTarget({ lead, mode })}
+                              onConverted={(projectId) => handleConverted(lead, projectId)}
                             />
                           </td>
                         </tr>
@@ -853,6 +886,7 @@ function LeadEditPanel({
   onBuildQuoteRequested,
   hasQuote,
   onDeleteRequested,
+  onConverted,
 }: {
   lead: Lead;
   referralSources: ReferralSource[];
@@ -864,8 +898,11 @@ function LeadEditPanel({
   onBuildQuoteRequested: () => void;
   hasQuote: boolean;
   onDeleteRequested: (mode: "lead" | "quote") => void;
+  onConverted: (projectId: string) => void;
 }) {
   const [statusError, setStatusError] = useState("");
+  const [confirmingSign, setConfirmingSign] = useState(false);
+  const [signing, setSigning] = useState(false);
   const [budgetError, setBudgetError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [phoneError, setPhoneError] = useState("");
@@ -880,12 +917,30 @@ function LeadEditPanel({
   // Not Materialized" tab (sow_sent-backed) in sync without merging the two
   // systems: a quote going out or falling through updates or creates the
   // linked sow_sent row alongside the lead's own status.
+  async function confirmSigned() {
+    if (!lead.convertedProjectId) return;
+    setSigning(true);
+    setStatusError("");
+    const result = await markProjectSigned(createClient(), lead.convertedProjectId);
+    setSigning(false);
+    if ("error" in result) {
+      setStatusError(result.error);
+      return;
+    }
+    setConfirmingSign(false);
+    onPatch({ status: "Signed Contract" });
+    onConverted(lead.convertedProjectId);
+  }
+
   async function handleStatusChange(newStatus: LeadStatus) {
     if (newStatus === "Signed Contract") {
-      onSignedContractRequested();
+      // A quoted lead already has its project; signing converts that one rather than creating a second.
+      if (lead.convertedProjectId) setConfirmingSign(true);
+      else onSignedContractRequested();
       return;
     }
 
+    setConfirmingSign(false);
     setStatusError("");
     const supabase = createClient();
     const { error } = await supabase.from("leads").update({ status: newStatus }).eq("id", lead.id);
@@ -1098,6 +1153,31 @@ function LeadEditPanel({
         {statusError && <span className="mt-1 block text-[10px] text-warning">{statusError}</span>}
       </div>
 
+      {confirmingSign && (
+        <div className="col-span-2 border border-brand-accent bg-surface p-3 text-sm sm:col-span-4">
+          <p className="mb-2 text-ink">
+            Mark <strong>{lead.name}</strong> as signed? The contract is recorded as signed and this quote becomes a project (Under
+            Contract). It will leave Quotes &amp; Leads and appear on the Projects page.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={confirmSigned}
+              disabled={signing}
+              className="bg-brand-primary px-3 py-1.5 font-mono text-[11px] uppercase text-white hover:bg-brand-primary/90 disabled:opacity-50"
+            >
+              {signing ? "Saving…" : "Yes, Contract Signed"}
+            </button>
+            <button
+              onClick={() => setConfirmingSign(false)}
+              disabled={signing}
+              className="border border-ink px-3 py-1.5 font-mono text-[11px] uppercase text-ink hover:bg-canvas disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="col-span-2 sm:col-span-4">
         <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Notes</label>
         <input
@@ -1121,6 +1201,14 @@ function LeadEditPanel({
           >
             Build Quote
           </button>
+        )}
+        {lead.convertedProjectId && (
+          <a
+            href={`/projects/${lead.convertedProjectId}`}
+            className="border border-brand-primary px-3 py-1.5 font-mono text-[11px] uppercase text-brand-primary hover:bg-canvas"
+          >
+            Open Project
+          </a>
         )}
         {canBuildQuote && hasQuote && (
           <button

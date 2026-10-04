@@ -7,6 +7,7 @@ import type { ProjectDetail } from "@/lib/projects/types";
 import type { Quote } from "@/lib/quotes/types";
 import type { ContractSummary } from "@/lib/contracts/types";
 import { ContractBuilderPanel } from "@/components/dashboard/ContractBuilderPanel";
+import { markProjectSigned } from "@/lib/records/convert";
 
 const PROJECT_TYPES = ["Residential", "Commercial", "Furniture"] as const;
 
@@ -26,16 +27,19 @@ export function ProjectStatusActions({
   const [showContractBuilder, setShowContractBuilder] = useState(false);
   const [lastContractId, setLastContractId] = useState<string | null>(contract?.id ?? null);
   const [markingUnderContract, setMarkingUnderContract] = useState(false);
+  const [signError, setSignError] = useState("");
 
   async function markUnderContract() {
     setMarkingUnderContract(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("projects").update({ status: "Under Contract" }).eq("id", project.id);
+    setSignError("");
+    const result = await markProjectSigned(createClient(), project.id);
     setMarkingUnderContract(false);
-    if (!error) {
-      setStatus("Under Contract");
-      router.refresh();
+    if ("error" in result) {
+      setSignError(result.error);
+      return;
     }
+    setStatus("Under Contract");
+    router.refresh();
   }
 
   // Plain corrective edit for a mis-entered type -- no cascading
@@ -106,13 +110,16 @@ export function ProjectStatusActions({
       )}
 
       {status === "Contract Sent" && (
-        <button
-          onClick={markUnderContract}
-          disabled={markingUnderContract}
-          className="ml-auto border border-ink px-3 py-1.5 font-mono text-[11px] uppercase text-ink hover:bg-canvas disabled:opacity-50"
-        >
-          {markingUnderContract ? "…" : "Mark Under Contract"}
-        </button>
+        <>
+          {signError && <span className="ml-auto text-xs text-warning">{signError}</span>}
+          <button
+            onClick={markUnderContract}
+            disabled={markingUnderContract}
+            className={`${signError ? "" : "ml-auto "}border border-ink px-3 py-1.5 font-mono text-[11px] uppercase text-ink hover:bg-canvas disabled:opacity-50`}
+          >
+            {markingUnderContract ? "Saving…" : "Mark Contract Signed"}
+          </button>
+        </>
       )}
 
       {showContractBuilder && (

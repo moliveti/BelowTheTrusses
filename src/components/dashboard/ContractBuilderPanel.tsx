@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { ProjectDetail } from "@/lib/projects/types";
 import type { Quote } from "@/lib/quotes/types";
 import { toIsoDate } from "@/lib/hours/dates";
+import { markContractSent } from "@/lib/records/convert";
 
 const TYPES = ["Residential", "Commercial", "Furniture"] as const;
 const BILLING_METHODS = ["Fixed Fee", "Hourly", "Commission"] as const;
@@ -192,6 +193,10 @@ export function ContractBuilderPanel({
       setError(projectError.message);
       return;
     }
+
+    // The contract already exists, so a failed pipeline sync shouldn't fail the
+    // submit and invite a duplicate contract on retry.
+    await markContractSent(supabase, project.id);
 
     setSaving(false);
     onCreated(contract.id);

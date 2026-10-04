@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { ProjectDetail, ProjectListItem } from "./types";
 import type { MilestoneForIntelligence } from "@/lib/intelligence/facts";
+import { isInSalesPipeline } from "./pipeline";
 
 /** All milestones on active projects, for cross-project intelligence (overdue/upcoming signals) — getProjectDetail only fetches one project's milestones at a time. */
 export async function getAllMilestonesForIntelligence(): Promise<MilestoneForIntelligence[]> {
@@ -26,8 +27,17 @@ export async function getAllMilestonesForIntelligence(): Promise<MilestoneForInt
   });
 }
 
+/** The Projects list: everything except quotes and unsigned contracts, which stay in Quotes & Leads until the contract is signed. */
 export async function getProjectsIndex(): Promise<ProjectListItem[]> {
-  return getProjectListItems();
+  const supabase = await createClient();
+  const [items, leadsRes] = await Promise.all([
+    getProjectListItems(),
+    supabase.from("leads").select("converted_project_id").not("converted_project_id", "is", null).neq("status", "Signed Contract"),
+  ]);
+  if (leadsRes.error) throw new Error(`leads (pipeline): ${leadsRes.error.message}`);
+
+  const trackedByOpenLead = new Set((leadsRes.data ?? []).map((l) => l.converted_project_id as string));
+  return items.filter((p) => !isInSalesPipeline(p, trackedByOpenLead));
 }
 
 /** Same rows as getProjectsIndex(), scoped to one client — powers the client detail page's project list. */
