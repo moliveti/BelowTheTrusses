@@ -11,6 +11,8 @@ import {
 } from "@/lib/contracts/schedules";
 import { getLogoBuffer } from "@/lib/pdf/logo";
 import { COMPANY_INFO } from "@/lib/pdf/companyInfo";
+import { contentHash, serveStoredOrGenerate } from "@/lib/pdf/store";
+import { clientVisibleLineItems } from "@/lib/quotes/pdfScope";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -161,7 +163,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     supabase.from("milestones").select("name, due_date, amount_due, sequence_order").eq("project_id", contract.project_id).order("sequence_order"),
     supabase
       .from("quotes")
-      .select("id, quote_line_items(task_name, hours), leads(email, phone, address, city, state, zip)")
+      .select("id, quote_line_items(section, task_name, hours), leads(email, phone, address, city, state, zip)")
       .eq("project_id", contract.project_id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -181,9 +183,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const clientState = lead?.state ?? null;
   const clientZip = lead?.zip ?? null;
 
-  const scopeLines = (quoteLineItemsRes.data?.quote_line_items ?? [])
-    .filter((li: { hours: number }) => li.hours > 0)
-    .map((li: { task_name: string; hours: number }) => `${li.task_name} (${li.hours} hrs)`);
+  const scopeLines = clientVisibleLineItems(
+    (quoteLineItemsRes.data?.quote_line_items ?? []) as { section: string; task_name: string; hours: number }[]
+  )
+    .filter((li) => li.hours > 0)
+    .map((li) => `${li.task_name} (${li.hours} hrs)`);
   const scopeOfWork = scopeLines.length > 0 ? scopeLines.join("\n") : "See attached scope of work.";
 
   const paymentScheduleLines = (milestonesRes.data ?? [])
@@ -235,33 +239,29 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       )}, representing "${firstMilestone.name}."`
     : "We ask that you confirm the foregoing by signing and returning a copy of this letter.";
 
-  const buffer = await renderToBuffer(
-    <ContractPdf
-      logo={getLogoBuffer()}
-      clientName={clientName}
-      clientEmail={clientEmail}
-      clientPhone={clientPhone}
-      clientAddress={clientAddress}
-      clientCity={clientCity}
-      clientState={clientState}
-      clientZip={clientZip}
-      projectName={project.name}
-      doc={doc}
-      initialPaymentLine={initialPaymentLine}
-    />
-  );
+  const pdfProps = {
+    clientName,
+    clientEmail,
+    clientPhone,
+    clientAddress,
+    clientCity,
+    clientState,
+    clientZip,
+    projectName: project.name,
+    doc,
+    initialPaymentLine,
+  };
 
-  const storagePath = `contracts/${id}.pdf`;
-  const admin = createAdminClient();
-  const { error: uploadError } = await admin.storage
-    .from("documents")
-    .upload(storagePath, buffer, { contentType: "application/pdf", upsert: true });
-  if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
-
-  await supabase.from("contracts").update({ pdf_storage_path: storagePath }).eq("id", id);
-
-  const { data: signed, error: signError } = await admin.storage.from("documents").createSignedUrl(storagePath, 60);
-  if (signError || !signed) return NextResponse.json({ error: signError?.message ?? "Failed to create a download link." }, { status: 500 });
-
-  return NextResponse.redirect(signed.signedUrl);
+  return serveStoredOrGenerate({
+    db: supabase,
+    admin: createAdminClient(),
+    kind: "contract",
+    ownerId: id,
+    projectId: contract.project_id,
+    contentHash: contentHash(pdfProps),
+    total: contract.design_fee_total,
+    forceNew: new URL(request.url).searchParams.get("new") === "1",
+    reuseWhileStored: true,
+    render: () => renderToBuffer(<ContractPdf logo={getLogoBuffer()} {...pdfProps} />),
+  });
 }

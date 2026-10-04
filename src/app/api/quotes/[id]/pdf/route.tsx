@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLogoBuffer } from "@/lib/pdf/logo";
 import { COMPANY_INFO } from "@/lib/pdf/companyInfo";
+import { contentHash, serveStoredOrGenerate } from "@/lib/pdf/store";
+import { clientVisibleLineItems } from "@/lib/quotes/pdfScope";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -204,7 +206,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { data: quote, error } = await supabase
     .from("quotes")
     .select(
-      "id, project_type, discount_type, discount_value, pm_hourly_rate, pm_estimated_hours, subtotal, total, created_at, leads(name, email, phone, address, city, state, zip)"
+      "id, project_id, project_type, discount_type, discount_value, pm_hourly_rate, pm_estimated_hours, subtotal, total, created_at, leads(name, email, phone, address, city, state, zip)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -233,40 +235,37 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       ? residentialPaymentTerms(mappedLineItems, quote.total)
       : nonResidentialPaymentTerms(quote.project_type);
 
-  const buffer = await renderToBuffer(
-    <QuotePdf
-      logo={getLogoBuffer()}
-      leadName={lead?.name ?? "Client"}
-      leadEmail={lead?.email ?? null}
-      leadPhone={lead?.phone ?? null}
-      leadAddress={lead?.address ?? null}
-      leadCity={lead?.city ?? null}
-      leadState={lead?.state ?? null}
-      leadZip={lead?.zip ?? null}
-      projectType={quote.project_type}
-      createdAt={quote.created_at}
-      lineItems={mappedLineItems}
-      paymentTerms={paymentTerms}
-      subtotal={quote.subtotal}
-      discountLabel={quote.discount_type ? (quote.discount_type === "percent" ? `Discount (${quote.discount_value}%)` : "Discount") : null}
-      discountAmount={discountAmount}
-      pmFeeLabel={pmFeeAmount > 0 ? "Project Management (est.)" : null}
-      pmFeeAmount={pmFeeAmount}
-      total={quote.total}
-    />
-  );
+  // Basic Services stays in the quote and in its totals; it just isn't printed for the client.
+  const pdfProps: Omit<QuotePdfProps, "logo"> = {
+    leadName: lead?.name ?? "Client",
+    leadEmail: lead?.email ?? null,
+    leadPhone: lead?.phone ?? null,
+    leadAddress: lead?.address ?? null,
+    leadCity: lead?.city ?? null,
+    leadState: lead?.state ?? null,
+    leadZip: lead?.zip ?? null,
+    projectType: quote.project_type,
+    createdAt: quote.created_at,
+    lineItems: clientVisibleLineItems(mappedLineItems),
+    paymentTerms,
+    subtotal: quote.subtotal,
+    discountLabel: quote.discount_type ? (quote.discount_type === "percent" ? `Discount (${quote.discount_value}%)` : "Discount") : null,
+    discountAmount,
+    pmFeeLabel: pmFeeAmount > 0 ? "Project Management (est.)" : null,
+    pmFeeAmount,
+    total: quote.total,
+  };
 
-  const storagePath = `quotes/${id}.pdf`;
-  const admin = createAdminClient();
-  const { error: uploadError } = await admin.storage
-    .from("documents")
-    .upload(storagePath, buffer, { contentType: "application/pdf", upsert: true });
-  if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
-
-  await supabase.from("quotes").update({ pdf_storage_path: storagePath }).eq("id", id);
-
-  const { data: signed, error: signError } = await admin.storage.from("documents").createSignedUrl(storagePath, 60);
-  if (signError || !signed) return NextResponse.json({ error: signError?.message ?? "Failed to create a download link." }, { status: 500 });
-
-  return NextResponse.redirect(signed.signedUrl);
+  return serveStoredOrGenerate({
+    db: supabase,
+    admin: createAdminClient(),
+    kind: "quote",
+    ownerId: id,
+    projectId: quote.project_id,
+    contentHash: contentHash(pdfProps),
+    total: quote.total,
+    forceNew: new URL(request.url).searchParams.get("new") === "1",
+    reuseWhileStored: false,
+    render: () => renderToBuffer(<QuotePdf logo={getLogoBuffer()} {...pdfProps} />),
+  });
 }

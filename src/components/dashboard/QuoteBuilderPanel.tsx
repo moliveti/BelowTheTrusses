@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead } from "@/lib/leads/types";
 import type { ReferralSource } from "@/lib/dashboard/types";
@@ -8,6 +8,9 @@ import type { SelectionCatalogItem } from "@/lib/quotes/types";
 import type { ClientOption } from "@/lib/clients/types";
 import { resolveClientId } from "@/lib/clients/resolveClient";
 import { QUOTE_TASK_CATALOG, SCOPE_TO_SELECTION_CATEGORIES } from "@/lib/scope";
+import { EDITABLE_QUOTE_STATUSES, mergeLineItems, type DraftLineItem } from "@/lib/quotes/edit";
+import { INTERNAL_SECTIONS } from "@/lib/quotes/pdfScope";
+import { loadQuoteForEdit, type ExistingQuote } from "@/lib/quotes/editLoader";
 import { toIsoDate } from "@/lib/hours/dates";
 import { isValidBudgetRange, isValidEmail, isValidPhone } from "@/lib/validation";
 import { US_STATES } from "@/lib/usStates";
@@ -16,13 +19,6 @@ import { ClientPicker } from "./ClientPicker";
 
 const TYPES = ["Residential", "Commercial", "Furniture"] as const;
 const FINISH_SELECTIONS_TASK = "Finish Selections";
-
-interface DraftLineItem {
-  section: string;
-  taskName: string;
-  hours: string;
-  rate: string;
-}
 
 function fmtUsd(n: number): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -34,27 +30,70 @@ function relevantCategories(scopeTags: string[], allCategories: string[]): strin
   return allCategories.filter((c) => mapped.has(c));
 }
 
-export function QuoteBuilderPanel({
-  lead,
-  selectionCatalog,
-  referralSources,
-  clients,
-  onClose,
-  onCreated,
-}: {
+interface QuotePanelProps {
   lead: Lead | null;
   selectionCatalog: SelectionCatalogItem[];
   referralSources: ReferralSource[];
   clients: ClientOption[];
   onClose: () => void;
   onCreated: (result: { lead: Lead; projectId: string; quoteId: string }) => void;
-}) {
+}
+
+/** Builds a new quote, or -- given `editQuoteId` -- reopens a saved one pre-filled with its hours, rates, selections and terms. */
+export function QuoteBuilderPanel({ editQuoteId, ...props }: QuotePanelProps & { editQuoteId?: string }) {
+  const [existing, setExisting] = useState<ExistingQuote | null>(null);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    if (!editQuoteId) return;
+    let cancelled = false;
+    loadQuoteForEdit(createClient(), editQuoteId).then((result) => {
+      if (cancelled) return;
+      if ("error" in result) setLoadError(result.error);
+      else setExisting(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [editQuoteId]);
+
+  if (!editQuoteId) return <QuoteForm {...props} />;
+  if (existing) return <QuoteForm {...props} existing={existing} />;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={props.onClose}>
+      <div className="w-full max-w-md border border-line bg-surface p-6" onClick={(e) => e.stopPropagation()}>
+        {loadError ? (
+          <>
+            <p className="mb-4 text-sm text-warning">{loadError}</p>
+            <button onClick={props.onClose} className="border border-ink px-3 py-1.5 font-mono text-[11px] uppercase text-ink hover:bg-canvas">
+              Close
+            </button>
+          </>
+        ) : (
+          <p className="text-sm text-ink/60">Loading quote…</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function QuoteForm({
+  lead,
+  selectionCatalog,
+  referralSources,
+  clients,
+  existing,
+  onClose,
+  onCreated,
+}: QuotePanelProps & { existing?: ExistingQuote }) {
   // Standalone intake fields -- only used and shown when there's no lead
   // yet (e.g. a client calling in directly rather than coming from the
   // Leads pipeline). When a lead is passed, its own data is used as-is.
   const [name, setName] = useState(lead?.name ?? "");
   const [client, setClient] = useState<{ id: string | null; name: string }>({ id: null, name: lead?.name ?? "" });
-  const [projectName, setProjectName] = useState("");
+  // Blank means "use the contact name" when creating; when editing it starts as the saved name.
+  const [projectName, setProjectName] = useState(existing?.projectName ?? "");
   const [email, setEmail] = useState(lead?.email ?? "");
   const [phone, setPhone] = useState(lead?.phone ?? "");
   const [address, setAddress] = useState(lead?.address ?? "");
@@ -68,22 +107,17 @@ export function QuoteBuilderPanel({
   const [localReferralSources, setLocalReferralSources] = useState<ReferralSource[]>([]);
 
   const [projectType, setProjectType] = useState<(typeof TYPES)[number]>(
-    (lead?.projectType as (typeof TYPES)[number]) || "Residential"
+    existing?.projectType ?? ((lead?.projectType as (typeof TYPES)[number]) || "Residential")
   );
-  const [lineItems, setLineItems] = useState<DraftLineItem[]>(
-    QUOTE_TASK_CATALOG.filter((t) => t.taskName !== FINISH_SELECTIONS_TASK).map((t) => ({
-      section: t.section,
-      taskName: t.taskName,
-      hours: "",
-      rate: String(t.rate),
-    }))
+  const [lineItems, setLineItems] = useState<DraftLineItem[]>(() =>
+    mergeLineItems(QUOTE_TASK_CATALOG, existing?.lineItems ?? [], FINISH_SELECTIONS_TASK)
   );
-  const [selectionQty, setSelectionQty] = useState<Record<string, string>>({});
-  const [includePm, setIncludePm] = useState(false);
-  const [pmHourlyRate, setPmHourlyRate] = useState("200");
-  const [pmEstimatedHours, setPmEstimatedHours] = useState("");
-  const [discountType, setDiscountType] = useState<"" | "percent" | "fixed">("");
-  const [discountValue, setDiscountValue] = useState("");
+  const [selectionQty, setSelectionQty] = useState<Record<string, string>>(existing?.selectionQty ?? {});
+  const [includePm, setIncludePm] = useState(existing?.includePm ?? false);
+  const [pmHourlyRate, setPmHourlyRate] = useState(existing?.pmHourlyRate ?? "200");
+  const [pmEstimatedHours, setPmEstimatedHours] = useState(existing?.pmEstimatedHours ?? "");
+  const [discountType, setDiscountType] = useState<"" | "percent" | "fixed">(existing?.discountType ?? "");
+  const [discountValue, setDiscountValue] = useState(existing?.discountValue ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -122,9 +156,130 @@ export function QuoteBuilderPanel({
     setLineItems((prev) => prev.map((li, i) => (i === index ? { ...li, ...patch } : li)));
   }
 
+  function buildLineRows(quoteId: string) {
+    const rows = lineItems
+      .filter((li) => Number(li.hours || 0) > 0)
+      .map((li, i) => ({
+        quote_id: quoteId,
+        section: li.section,
+        task_name: li.taskName,
+        hours: Number(li.hours),
+        rate: Number(li.rate),
+        amount: Number(li.hours) * Number(li.rate),
+        sequence_order: i + 1,
+      }));
+    if (finishSelectionsHours > 0) {
+      rows.push({
+        quote_id: quoteId,
+        section: "FFE",
+        task_name: FINISH_SELECTIONS_TASK,
+        hours: finishSelectionsHours,
+        rate: finishSelectionsRate,
+        amount: finishSelectionsHours * finishSelectionsRate,
+        sequence_order: rows.length + 1,
+      });
+    }
+    return rows;
+  }
+
+  function buildSelectionRows(quoteId: string) {
+    return selectionCatalog
+      .filter((item) => Number(selectionQty[item.id] || 0) > 0)
+      .map((item) => ({
+        quote_id: quoteId,
+        catalog_item_id: item.id,
+        qty: Number(selectionQty[item.id]),
+        hours: Number(selectionQty[item.id]) * item.defaultHours,
+      }));
+  }
+
+  // Saves changes to an existing quote. New line items and selections are
+  // written first and the old ones removed afterwards, so a failure part-way
+  // never leaves the quote with nothing in it.
+  async function saveEdit(saved: ExistingQuote) {
+    const supabase = createClient();
+    const finalProjectName = projectName.trim() || saved.projectName;
+
+    if (finalProjectName !== saved.projectName) {
+      const { data: clash, error: clashError } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("client_id", saved.clientId)
+        .eq("name", finalProjectName)
+        .neq("id", saved.projectId)
+        .limit(1);
+      if (clashError) return setError(clashError.message);
+      if (clash && clash.length > 0) {
+        return setError(`${saved.clientName} already has a project named "${finalProjectName}". Enter a different project name.`);
+      }
+    }
+
+    const [oldLines, oldSelections] = await Promise.all([
+      supabase.from("quote_line_items").select("id").eq("quote_id", saved.quoteId),
+      supabase.from("quote_selections").select("id").eq("quote_id", saved.quoteId),
+    ]);
+    const lookupError = oldLines.error ?? oldSelections.error;
+    if (lookupError) return setError(lookupError.message);
+
+    const { data: updated, error: quoteError } = await supabase
+      .from("quotes")
+      .update({
+        project_type: projectType,
+        discount_type: discountType || null,
+        discount_value: discountType ? Number(discountValue || 0) : null,
+        pm_hourly_rate: includePm ? Number(pmHourlyRate || 0) : null,
+        pm_estimated_hours: includePm ? Number(pmEstimatedHours || 0) : null,
+        subtotal,
+        total,
+      })
+      .eq("id", saved.quoteId)
+      .in("status", EDITABLE_QUOTE_STATUSES)
+      .select("id");
+    if (quoteError) return setError(quoteError.message);
+    if (!updated || updated.length === 0) {
+      return setError("This quote was accepted in the meantime, so it can't be changed any more.");
+    }
+
+    const lineRows = buildLineRows(saved.quoteId);
+    if (lineRows.length > 0) {
+      const { error: insertError } = await supabase.from("quote_line_items").insert(lineRows);
+      if (insertError) return setError(insertError.message);
+    }
+    const selectionRows = buildSelectionRows(saved.quoteId);
+    if (selectionRows.length > 0) {
+      const { error: insertError } = await supabase.from("quote_selections").insert(selectionRows);
+      if (insertError) return setError(insertError.message);
+    }
+
+    const staleLineIds = (oldLines.data ?? []).map((r) => r.id);
+    if (staleLineIds.length > 0) {
+      const { error: deleteError } = await supabase.from("quote_line_items").delete().in("id", staleLineIds);
+      if (deleteError) return setError(deleteError.message);
+    }
+    const staleSelectionIds = (oldSelections.data ?? []).map((r) => r.id);
+    if (staleSelectionIds.length > 0) {
+      const { error: deleteError } = await supabase.from("quote_selections").delete().in("id", staleSelectionIds);
+      if (deleteError) return setError(deleteError.message);
+    }
+
+    const { error: projectError } = await supabase
+      .from("projects")
+      .update({ name: finalProjectName, type: projectType })
+      .eq("id", saved.projectId);
+    if (projectError) return setError(projectError.code === "23505" ? "That project name is already used by this client." : projectError.message);
+
+    onCreated({ lead: lead!, projectId: saved.projectId, quoteId: saved.quoteId });
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (existing) {
+      setSaving(true);
+      await saveEdit(existing);
+      setSaving(false);
+      return;
+    }
     if (!lead && !name.trim()) return setError("Name is required.");
     if (!lead && !isValidBudgetRange(budgetRange)) return setError('Budget should be a dollar amount or range, e.g. "$10k–$20k".');
     if (!lead && !isValidEmail(email)) return setError("Enter a valid email address.");
@@ -261,28 +416,7 @@ export function QuoteBuilderPanel({
       return;
     }
 
-    const rows = lineItems
-      .filter((li) => Number(li.hours || 0) > 0)
-      .map((li, i) => ({
-        quote_id: quote.id,
-        section: li.section,
-        task_name: li.taskName,
-        hours: Number(li.hours),
-        rate: Number(li.rate),
-        amount: Number(li.hours) * Number(li.rate),
-        sequence_order: i + 1,
-      }));
-    if (finishSelectionsHours > 0) {
-      rows.push({
-        quote_id: quote.id,
-        section: "FFE",
-        task_name: FINISH_SELECTIONS_TASK,
-        hours: finishSelectionsHours,
-        rate: finishSelectionsRate,
-        amount: finishSelectionsHours * finishSelectionsRate,
-        sequence_order: rows.length + 1,
-      });
-    }
+    const rows = buildLineRows(quote.id);
     if (rows.length > 0) {
       const { error: lineItemsError } = await supabase.from("quote_line_items").insert(rows);
       if (lineItemsError) {
@@ -292,14 +426,7 @@ export function QuoteBuilderPanel({
       }
     }
 
-    const selectionRows = selectionCatalog
-      .filter((item) => Number(selectionQty[item.id] || 0) > 0)
-      .map((item) => ({
-        quote_id: quote.id,
-        catalog_item_id: item.id,
-        qty: Number(selectionQty[item.id]),
-        hours: Number(selectionQty[item.id]) * item.defaultHours,
-      }));
+    const selectionRows = buildSelectionRows(quote.id);
     if (selectionRows.length > 0) {
       const { error: selectionsError } = await supabase.from("quote_selections").insert(selectionRows);
       if (selectionsError) {
@@ -344,7 +471,10 @@ export function QuoteBuilderPanel({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
-          <h3 className="text-base text-ink">Build Quote{lead ? ` — ${lead.name}` : ""}</h3>
+          <h3 className="text-base text-ink">
+            {existing ? "Edit Quote" : "Build Quote"}
+            {lead ? ` — ${lead.name}` : ""}
+          </h3>
           <button onClick={onClose} className="font-mono text-xs uppercase text-ink/50 underline underline-offset-2">
             Cancel
           </button>
@@ -424,16 +554,25 @@ export function QuoteBuilderPanel({
           )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <ClientPicker clients={clients} value={client} onChange={setClient} />
+            {existing ? (
+              <div>
+                <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Client</label>
+                <div className="w-full border border-line bg-canvas px-2 py-1.5 text-xs text-ink/70">{existing.clientName}</div>
+              </div>
+            ) : (
+              <ClientPicker clients={clients} value={client} onChange={setClient} />
+            )}
             <div>
               <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Project Name</label>
               <input
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
-                placeholder={lead?.name ?? (name.trim() || "e.g. Smith Kitchen Remodel")}
+                placeholder={existing?.projectName ?? lead?.name ?? (name.trim() || "e.g. Smith Kitchen Remodel")}
                 className="w-full border border-line px-2 py-1.5 text-xs"
               />
-              <p className="mt-1 text-[10px] text-ink/50">Leave blank to use the contact name. You can rename it later.</p>
+              <p className="mt-1 text-[10px] text-ink/50">
+                {existing ? "Changing this renames the project." : "Leave blank to use the contact name. You can rename it later."}
+              </p>
             </div>
           </div>
 
@@ -462,7 +601,13 @@ export function QuoteBuilderPanel({
             <div className="border border-line bg-canvas">
               {lineItems.map((li, i) => (
                 <div key={`${li.section}-${li.taskName}`} className="flex items-center gap-2 border-b border-line p-2 text-xs last:border-b-0">
-                  <span className="w-40 flex-shrink-0 font-mono text-[9.5px] uppercase text-ink/40">{li.section}</span>
+                  <span
+                    className="w-40 flex-shrink-0 font-mono text-[9.5px] uppercase text-ink/40"
+                    title={INTERNAL_SECTIONS.includes(li.section) ? "Counted in the cost build-up, but not printed on the client's PDF" : undefined}
+                  >
+                    {li.section}
+                    {INTERNAL_SECTIONS.includes(li.section) && " · internal"}
+                  </span>
                   <span className="min-w-0 flex-1">{li.taskName}</span>
                   <input
                     type="number"
@@ -609,7 +754,7 @@ export function QuoteBuilderPanel({
               disabled={saving}
               className="bg-brand-primary px-4 py-1.5 text-xs text-white transition hover:bg-brand-primary/90 disabled:opacity-50"
             >
-              {saving ? "Creating…" : "Create Quote"}
+              {saving ? (existing ? "Saving…" : "Creating…") : existing ? "Save Changes" : "Create Quote"}
             </button>
             {error && <span className="text-xs text-warning">{error}</span>}
           </div>

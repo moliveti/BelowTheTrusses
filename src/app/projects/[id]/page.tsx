@@ -15,6 +15,7 @@ import { BillingSection } from "@/components/projects/BillingSection";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ProjectNameEditor } from "@/components/projects/ProjectNameEditor";
 import { DeleteProjectSection } from "@/components/projects/DeleteProjectSection";
+import { DocumentsList } from "@/components/projects/DocumentsList";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -113,6 +114,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </CollapsibleSection>
       ) : (
         <HoursCostSection hoursByPerson={project.hoursByPerson} />
+      )}
+
+      {canBuildQuotes(role) && (
+        <CollapsibleSection title="Documents">
+          <DocumentsList projectId={project.id} />
+        </CollapsibleSection>
       )}
 
       {canBuildQuotes(role) && <DeleteProjectSection projectId={project.id} projectName={project.name} />}

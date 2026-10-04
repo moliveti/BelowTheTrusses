@@ -19,6 +19,7 @@ import { markProjectSigned } from "@/lib/records/convert";
 import { ProjectKickoffPanel } from "./ProjectKickoffPanel";
 import { QuoteBuilderPanel } from "./QuoteBuilderPanel";
 import { DeleteLeadDialog } from "./DeleteLeadDialog";
+import { DocumentsList } from "@/components/projects/DocumentsList";
 
 const STATUSES: LeadStatus[] = [
   "New Prospect",
@@ -91,6 +92,7 @@ export function LeadsTab({
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
   const [deleteTarget, setDeleteTarget] = useState<{ lead: Lead; mode: "lead" | "quote" } | null>(null);
+  const [editTarget, setEditTarget] = useState<Lead | null>(null);
   const [notice, setNotice] = useState<{ text: string; href?: string; linkLabel?: string } | null>(null);
   const [referralSources, setReferralSources] = useState(initialReferralSources);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
@@ -360,6 +362,7 @@ export function LeadsTab({
                               hasQuote={Boolean(quotesByLeadId[lead.id])}
                               onDeleteRequested={(mode) => setDeleteTarget({ lead, mode })}
                               onConverted={(projectId) => handleConverted(lead, projectId)}
+                              onEditQuoteRequested={() => setEditTarget(lead)}
                             />
                           </td>
                         </tr>
@@ -392,6 +395,24 @@ export function LeadsTab({
           mode={deleteTarget.mode}
           onClose={() => setDeleteTarget(null)}
           onDeleted={(summary) => handleDeleted(deleteTarget, summary)}
+        />
+      )}
+
+      {editTarget && quotesByLeadId[editTarget.id] && (
+        <QuoteBuilderPanel
+          lead={editTarget}
+          editQuoteId={quotesByLeadId[editTarget.id]}
+          selectionCatalog={selectionCatalog}
+          referralSources={referralSources}
+          clients={clients}
+          onClose={() => setEditTarget(null)}
+          onCreated={() => {
+            setNotice({
+              text: `Quote for "${editTarget.name}" saved. Download PDF to get the updated version; earlier PDFs stay available under Documents.`,
+            });
+            setEditTarget(null);
+            router.refresh();
+          }}
         />
       )}
 
@@ -887,6 +908,7 @@ function LeadEditPanel({
   hasQuote,
   onDeleteRequested,
   onConverted,
+  onEditQuoteRequested,
 }: {
   lead: Lead;
   referralSources: ReferralSource[];
@@ -899,7 +921,10 @@ function LeadEditPanel({
   hasQuote: boolean;
   onDeleteRequested: (mode: "lead" | "quote") => void;
   onConverted: (projectId: string) => void;
+  onEditQuoteRequested: () => void;
 }) {
+  // A quote can be reworked until its contract goes out; after that it's locked.
+  const canEditQuote = canBuildQuote && hasQuote && (lead.status === "New Prospect" || lead.status === "Quote Sent");
   const [statusError, setStatusError] = useState("");
   const [confirmingSign, setConfirmingSign] = useState(false);
   const [signing, setSigning] = useState(false);
@@ -1202,6 +1227,14 @@ function LeadEditPanel({
             Build Quote
           </button>
         )}
+        {canEditQuote && (
+          <button
+            onClick={onEditQuoteRequested}
+            className="border border-ink px-3 py-1.5 font-mono text-[11px] uppercase text-ink hover:bg-canvas"
+          >
+            Edit Quote
+          </button>
+        )}
         {lead.convertedProjectId && (
           <a
             href={`/projects/${lead.convertedProjectId}`}
@@ -1230,6 +1263,13 @@ function LeadEditPanel({
           <span className="ml-auto font-mono text-[10px] text-ink/40">Last contacted {lead.lastContactedDate}</span>
         )}
       </div>
+
+      {canBuildQuote && lead.convertedProjectId && (
+        <div className="col-span-2 sm:col-span-4">
+          <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink/60">Saved Quote &amp; Contract PDFs</label>
+          <DocumentsList projectId={lead.convertedProjectId} />
+        </div>
+      )}
     </div>
   );
 }
