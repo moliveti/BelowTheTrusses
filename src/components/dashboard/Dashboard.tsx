@@ -178,7 +178,7 @@ export function Dashboard({
           rates={contractedWork.rates}
         />
       )}
-      {tab === "productivity" && <ProductivityTab entries={contractedWork.timeEntries} projects={projects} />}
+      {tab === "productivity" && <ProductivityTab entries={contractedWork.timeEntries} projects={projects} payments={payments} />}
       {tab === "projects" && <ProjectsIndex projects={projects} />}
       {tab === "clients" && <ClientsIndex clients={clients} />}
       {tab === "payments" && <PaymentScheduleTable payments={payments} />}

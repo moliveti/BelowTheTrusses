@@ -9,12 +9,25 @@ export interface ProjectRevenueInput {
   outstandingBalance: number;
 }
 
+/** The slice of a payment-schedule row this needs -- matches PaymentRow. */
+export interface PaymentInput {
+  projectId: string;
+  dueDate: string | null;
+  amountDue: number | null;
+  amountPaid: number | null;
+}
+
+/** "all" is every year together; a number is one calendar year. */
+export type ProfitYear = "all" | number;
+
 export interface ProjectRevenue {
   contractValue: number | null;
   collected: number;
   notYetPaid: number;
   total: number;
 }
+
+const yearOf = (date: string) => Number(date.slice(0, 4));
 
 /**
  * Total revenue is what the payment schedule adds up to (collected + still
@@ -33,6 +46,22 @@ export function projectRevenue(p: ProjectRevenueInput | undefined): ProjectReven
   };
 }
 
+/** Revenue for one calendar year: the payments due in that year, the same grouping the Payment Schedules page uses. */
+function projectRevenueForYear(contractValue: number | null, payments: PaymentInput[], year: number): ProjectRevenue {
+  let total = 0;
+  let collected = 0;
+  let notYetPaid = 0;
+  for (const p of payments) {
+    if (!p.dueDate || yearOf(p.dueDate) !== year) continue;
+    const due = p.amountDue ?? 0;
+    const paid = p.amountPaid ?? 0;
+    total += due;
+    collected += paid;
+    notYetPaid += Math.max(0, due - paid);
+  }
+  return { contractValue, collected, notYetPaid, total };
+}
+
 export interface ProjectProfitRow extends ProjectRevenue {
   projectId: string;
   name: string;
@@ -45,28 +74,69 @@ export interface ProjectProfitRow extends ProjectRevenue {
   contractors: CostBreakdownRow[];
 }
 
-/** One row per project that has hours logged, joining its contractor cost to its revenue. */
-export function buildProjectProfitRows(entries: TimeEntry[], projects: ProjectRevenueInput[]): ProjectProfitRow[] {
+/** Years worth offering in the filter: every year with logged hours or a payment due, plus the current one. */
+export function profitYears(entries: TimeEntry[], payments: PaymentInput[], currentYear: number): number[] {
+  const years = new Set<number>([currentYear]);
+  for (const e of entries) years.add(yearOf(e.workDate));
+  for (const p of payments) if (p.dueDate) years.add(yearOf(p.dueDate));
+  return Array.from(years).sort((a, b) => a - b);
+}
+
+/**
+ * One row per project that has ever had hours logged, joining its contractor
+ * cost to its revenue. For a single year, cost is the hours worked in that
+ * year and revenue is the payments due in it; a project with neither in that
+ * year is left out.
+ */
+export function buildProjectProfitRows(
+  entries: TimeEntry[],
+  projects: ProjectRevenueInput[],
+  payments: PaymentInput[] = [],
+  year: ProfitYear = "all"
+): ProjectProfitRow[] {
   const projectById = new Map(projects.map((p) => [p.id, p]));
+  const paymentsByProject = new Map<string, PaymentInput[]>();
+  for (const p of payments) {
+    if (!paymentsByProject.has(p.projectId)) paymentsByProject.set(p.projectId, []);
+    paymentsByProject.get(p.projectId)!.push(p);
+  }
+
+  const scopedEntries = year === "all" ? entries : entries.filter((e) => yearOf(e.workDate) === year);
   const entriesByProject = new Map<string, TimeEntry[]>();
-  for (const e of entries) {
+  for (const e of scopedEntries) {
     if (!entriesByProject.has(e.projectId)) entriesByProject.set(e.projectId, []);
     entriesByProject.get(e.projectId)!.push(e);
   }
+  const costById = new Map(costByProject(scopedEntries).map((r) => [r.id, r]));
 
-  return costByProject(entries).map((row) => {
-    const revenue = projectRevenue(projectById.get(row.id));
-    return {
-      projectId: row.id,
-      name: row.name,
+  const projectNames = new Map<string, string>();
+  for (const e of entries) projectNames.set(e.projectId, e.projectName);
+
+  const rows: ProjectProfitRow[] = [];
+  for (const [projectId, name] of projectNames) {
+    const project = projectById.get(projectId);
+    const revenue =
+      year === "all"
+        ? projectRevenue(project)
+        : projectRevenueForYear(project?.plannedRevenue ?? null, paymentsByProject.get(projectId) ?? [], year);
+    const cost = costById.get(projectId);
+    const hours = cost?.hours ?? 0;
+    const costTotal = cost?.cost ?? 0;
+    if (year !== "all" && hours === 0 && revenue.total === 0 && revenue.collected === 0) continue;
+
+    rows.push({
+      projectId,
+      name,
       ...revenue,
-      hours: row.hours,
-      cost: row.cost,
-      hasUnknownRate: row.hasUnknownRate,
-      profit: revenue.total - row.cost,
-      contractors: costByContractor(entriesByProject.get(row.id) ?? []),
-    };
-  });
+      hours,
+      cost: costTotal,
+      hasUnknownRate: cost?.hasUnknownRate ?? false,
+      profit: revenue.total - costTotal,
+      contractors: costByContractor(entriesByProject.get(projectId) ?? []),
+    });
+  }
+
+  return rows.sort((a, b) => b.cost - a.cost || b.total - a.total || a.name.localeCompare(b.name));
 }
 
 export interface ProjectProfitTotals {

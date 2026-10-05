@@ -13,13 +13,28 @@ import {
 } from "@/lib/hours/productivity";
 import { fmtUsd, MONTH_LABELS } from "@/lib/dashboard/format";
 import type { ProjectListItem } from "@/lib/projects/types";
-import { buildProjectProfitRows, totalProfitRows, type ProjectProfitRow } from "@/lib/projects/profitability";
+import type { PaymentRow } from "@/lib/payments/types";
+import {
+  buildProjectProfitRows,
+  profitYears,
+  totalProfitRows,
+  type ProfitYear,
+  type ProjectProfitRow,
+} from "@/lib/projects/profitability";
 
 const fmtHours = (n: number) => (n ? n.toFixed(2) : "—");
 const fmtCost = (n: number) => (n ? fmtUsd(n) : "—");
 const fmtRate = (n: number | null) => (n === null ? "—" : `${fmtUsd(n)}/hr`);
 
-export function ProductivityTab({ entries, projects }: { entries: TimeEntry[]; projects: ProjectListItem[] }) {
+export function ProductivityTab({
+  entries,
+  projects,
+  payments,
+}: {
+  entries: TimeEntry[];
+  projects: ProjectListItem[];
+  payments: PaymentRow[];
+}) {
   const years = distinctYearsFromEntries(entries);
 
   return (
@@ -35,7 +50,7 @@ export function ProductivityTab({ entries, projects }: { entries: TimeEntry[]; p
         <>
           <section className="mb-12">
             <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-ink/60">Cost Per Hour</h3>
-            <CostPerHourDashboard entries={entries} projects={projects} />
+            <CostPerHourDashboard entries={entries} projects={projects} payments={payments} />
           </section>
 
           <section className="mb-12">
@@ -55,13 +70,29 @@ export function ProductivityTab({ entries, projects }: { entries: TimeEntry[]; p
 
 type CostView = "project" | "contractor" | "month";
 
-function CostPerHourDashboard({ entries, projects }: { entries: TimeEntry[]; projects: ProjectListItem[] }) {
+function CostPerHourDashboard({
+  entries,
+  projects,
+  payments,
+}: {
+  entries: TimeEntry[];
+  projects: ProjectListItem[];
+  payments: PaymentRow[];
+}) {
   const [view, setView] = useState<CostView>("project");
+  const [year, setYear] = useState<ProfitYear>("all");
+
+  // The tiles above always show all-time and year-to-date; the year picker scopes the three tables below.
+  const yearEntries = useMemo(
+    () => (year === "all" ? entries : entries.filter((e) => e.workDate.slice(0, 4) === String(year))),
+    [entries, year]
+  );
+  const yearOptions = useMemo(() => profitYears(entries, payments, new Date().getFullYear()), [entries, payments]);
 
   const byProject = useMemo(() => costByProject(entries), [entries]);
-  const profitRows = useMemo(() => buildProjectProfitRows(entries, projects), [entries, projects]);
-  const byContractor = useMemo(() => costByContractor(entries), [entries]);
-  const byMonth = useMemo(() => costByMonth(entries), [entries]);
+  const profitRows = useMemo(() => buildProjectProfitRows(entries, projects, payments, year), [entries, projects, payments, year]);
+  const byContractor = useMemo(() => costByContractor(yearEntries), [yearEntries]);
+  const byMonth = useMemo(() => costByMonth(yearEntries), [yearEntries]);
 
   const totalHours = entries.reduce((s, e) => s + e.hours, 0);
   const totalCost = entries.reduce((s, e) => s + (e.hourlyRate !== null ? e.hours * e.hourlyRate : 0), 0);
@@ -95,7 +126,7 @@ function CostPerHourDashboard({ entries, projects }: { entries: TimeEntry[]; pro
         <Stat label="Projects Staffed" value={String(byProject.length)} />
       </div>
 
-      <div className="mb-3 flex gap-1">
+      <div className="mb-3 flex flex-wrap items-center gap-1">
         {(["project", "contractor", "month"] as CostView[]).map((v) => (
           <button
             key={v}
@@ -107,9 +138,24 @@ function CostPerHourDashboard({ entries, projects }: { entries: TimeEntry[]; pro
             By {v === "project" ? "Project" : v === "contractor" ? "Contractor" : "Month"}
           </button>
         ))}
+        <label className="ml-auto flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">
+          Year
+          <select
+            value={String(year)}
+            onChange={(e) => setYear(e.target.value === "all" ? "all" : Number(e.target.value))}
+            className="border border-line bg-surface px-2 py-1.5 text-xs normal-case text-ink"
+          >
+            <option value="all">Total (all years)</option>
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      {view === "project" && <ProjectProfitTable rows={profitRows} />}
+      {view === "project" && <ProjectProfitTable rows={profitRows} year={year} />}
       {view === "contractor" && <CostBreakdownTable rows={byContractor} nameHeader="Contractor" />}
       {view === "month" && <MonthCostTable rows={byMonth} />}
     </div>
@@ -117,12 +163,17 @@ function CostPerHourDashboard({ entries, projects }: { entries: TimeEntry[]; pro
 }
 
 const fmtMoney = (n: number) => (n ? fmtUsd(n) : "—");
+const fmtProfit = (n: number) => (n < 0 ? "-" : "") + fmtUsd(Math.abs(n));
 
-function ProjectProfitTable({ rows }: { rows: ProjectProfitRow[] }) {
+function ProjectProfitTable({ rows, year }: { rows: ProjectProfitRow[]; year: ProfitYear }) {
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
 
   if (rows.length === 0) {
-    return <div className="border border-line bg-surface p-4 text-sm text-ink/50">No data yet.</div>;
+    return (
+      <div className="border border-line bg-surface p-4 text-sm text-ink/50">
+        {year === "all" ? "No data yet." : `No hours worked or payments due in ${year}.`}
+      </div>
+    );
   }
 
   const totals = totalProfitRows(rows);
@@ -173,7 +224,7 @@ function ProjectProfitTable({ rows }: { rows: ProjectProfitRow[] }) {
                     {fmtCost(r.cost)}
                     {r.hasUnknownRate && <span className="ml-1 text-warning">*</span>}
                   </td>
-                  <td className={`px-3 py-2 text-right font-medium tabular-nums ${profitClass(r.profit)}`}>{fmtUsd(r.profit)}</td>
+                  <td className={`px-3 py-2 text-right font-medium tabular-nums ${profitClass(r.profit)}`}>{fmtProfit(r.profit)}</td>
                 </tr>
                 {isOpen && (
                   <tr className="border-b border-line bg-canvas">
@@ -215,12 +266,14 @@ function ProjectProfitTable({ rows }: { rows: ProjectProfitRow[] }) {
             <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(totals.total)}</td>
             <td className="px-3 py-2 text-right tabular-nums">{fmtHours(totals.hours)}</td>
             <td className="px-3 py-2 text-right tabular-nums">{fmtCost(totals.cost)}</td>
-            <td className={`px-3 py-2 text-right tabular-nums ${profitClass(totals.profit)}`}>{fmtUsd(totals.profit)}</td>
+            <td className={`px-3 py-2 text-right tabular-nums ${profitClass(totals.profit)}`}>{fmtProfit(totals.profit)}</td>
           </tr>
         </tbody>
       </table>
       <p className="border-t border-line px-3 py-1.5 text-[11px] text-ink/40">
-        Total Revenue = collected + not yet paid, from each project&apos;s payment schedule (the contract value is used when there&apos;s no schedule yet).
+        {year === "all"
+          ? "Total Revenue = collected + not yet paid, from each project's payment schedule (the contract value is used when there's no schedule yet). "
+          : `Showing ${year}: revenue is the payments due in ${year}, and hours and cost are the work done in ${year}. Contract Value is the project's overall figure. `}
         Profit = Total Revenue − contractor cost. Click a project to see each contractor&apos;s hours and cost.
         {anyUnknownRate && " * some hours have no rate set on their assignment — cost is understated and profit overstated."}
       </p>
