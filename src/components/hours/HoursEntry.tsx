@@ -281,12 +281,16 @@ function EntryTable({
               <td className="px-3 py-2 text-right font-mono tabular-nums">{e.hours.toFixed(2)}</td>
               <td className="px-3 py-2">{e.workDescription}</td>
               <td className="px-3 py-2 text-right">
-                <button
-                  onClick={() => onDelete(e.id)}
-                  className="font-mono text-[11px] text-warning underline underline-offset-2"
-                >
-                  Delete
-                </button>
+                {e.paidAt ? (
+                  <span className="font-mono text-[11px] uppercase text-positive">Paid</span>
+                ) : (
+                  <button
+                    onClick={() => onDelete(e.id)}
+                    className="font-mono text-[11px] text-warning underline underline-offset-2"
+                  >
+                    Delete
+                  </button>
+                )}
               </td>
             </tr>
           ))}

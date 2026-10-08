@@ -43,14 +43,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  // The on_auth_user_created trigger already inserted a profiles row
-  // defaulting to role 'owner' — only need a follow-up update when a
-  // different role was requested.
-  if (newRole !== "owner") {
-    const { error: roleError } = await admin.from("profiles").update({ role: newRole }).eq("id", data.user.id);
-    if (roleError) {
-      return NextResponse.json({ error: roleError.message }, { status: 500 });
-    }
+  // The on_auth_user_created trigger already inserted a profiles row with the
+  // least-privileged default role ('subcontractor'), so the requested role --
+  // owner included -- always has to be set explicitly here.
+  const { error: roleError } = await admin.from("profiles").update({ role: newRole }).eq("id", data.user.id);
+  if (roleError) {
+    return NextResponse.json({ error: roleError.message }, { status: 500 });
   }
 
   // A subcontractor login is useless without being linked to the
