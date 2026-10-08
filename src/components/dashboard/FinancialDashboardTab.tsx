@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import type { RevenueMode, RevenueRow } from "@/lib/dashboard/types";
+import type { PendingQuotes } from "@/lib/quotes/pipeline";
 import { ModeToggle } from "./ModeToggle";
 import { KpiRow } from "./KpiRow";
+import { PendingQuotesCard } from "./PendingQuotesCard";
 import { YoyChart } from "./YoyChart";
 import { BreakdownTable } from "./BreakdownTable";
 import { BusinessMix, type MixPeriod } from "./BusinessMix";
@@ -16,6 +18,7 @@ export function FinancialDashboardTab({
   onModeChange,
   currentYear,
   currentMonth,
+  pendingQuotes,
 }: {
   rows: RevenueRow[];
   collectedRows: RevenueRow[];
@@ -24,6 +27,8 @@ export function FinancialDashboardTab({
   onModeChange: (mode: RevenueMode) => void;
   currentYear: number;
   currentMonth: number;
+  /** Owners only (Amy + Mariano): quote amounts are never shown to anyone else, who keep the Business Mix widget. */
+  pendingQuotes: PendingQuotes | null;
 }) {
   const [mixPeriod, setMixPeriod] = useState<MixPeriod>("ytd");
 
@@ -47,13 +52,17 @@ export function FinancialDashboardTab({
           rows={rows}
           currentYear={currentYear}
           extra={
-            <BusinessMix
-              rows={rows}
-              currentYear={currentYear}
-              currentMonth={currentMonth}
-              period={mixPeriod}
-              onPeriodChange={setMixPeriod}
-            />
+            pendingQuotes ? (
+              <PendingQuotesCard summary={pendingQuotes} />
+            ) : (
+              <BusinessMix
+                rows={rows}
+                currentYear={currentYear}
+                currentMonth={currentMonth}
+                period={mixPeriod}
+                onPeriodChange={setMixPeriod}
+              />
+            )
           }
         />
       </section>

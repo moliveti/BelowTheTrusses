@@ -7,11 +7,13 @@ import type { Assignment, ProjectOption, SubcontractorOption, SubcontractorRates
 import type { ProjectListItem } from "@/lib/projects/types";
 import type { Lead } from "@/lib/leads/types";
 import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
-import type { SelectionCatalogItem } from "@/lib/quotes/types";
+import type { LatestQuote, SelectionCatalogItem } from "@/lib/quotes/types";
+import { summarizePendingQuotes } from "@/lib/quotes/pipeline";
 import type { ClientListItem, ClientOption } from "@/lib/clients/types";
 import type { PaymentRow } from "@/lib/payments/types";
 import type { TeamMember } from "@/lib/admin/types";
 import type { Role } from "@/lib/profile";
+import { canBuildQuotes } from "@/lib/permissions";
 import type { RecommendationRow } from "@/lib/intelligence/queries";
 import type { Signal } from "@/lib/intelligence/types";
 import type { BackupRow, CurrentCycleStatus } from "@/lib/backup/queries";
@@ -51,7 +53,7 @@ export function Dashboard({
   leads,
   milestoneTemplates,
   selectionCatalog,
-  quotesByLeadId,
+  latestQuotesByLeadId,
   role,
   team,
   recommendations,
@@ -72,7 +74,7 @@ export function Dashboard({
   leads: Lead[];
   milestoneTemplates: MilestoneTemplateGroup[];
   selectionCatalog: SelectionCatalogItem[];
-  quotesByLeadId: Record<string, string>;
+  latestQuotesByLeadId: Record<string, LatestQuote>;
   role: Role | null;
   team: TeamMember[];
   recommendations: RecommendationRow[];
@@ -96,6 +98,12 @@ export function Dashboard({
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
+
+  // Quote amounts are owner-only (Amy + Mariano); anyone else gets null and keeps the Business Mix widget.
+  const pendingQuotes = useMemo(
+    () => (canBuildQuotes(role) ? summarizePendingQuotes(leads, latestQuotesByLeadId) : null),
+    [role, leads, latestQuotesByLeadId]
+  );
 
   const monthStats = useMemo(() => {
     const combined = [...data.collected, ...data.forecast];
@@ -133,6 +141,7 @@ export function Dashboard({
           onModeChange={setMode}
           currentYear={currentYear}
           currentMonth={currentMonth}
+          pendingQuotes={pendingQuotes}
         />
       )}
       {tab === "ai-analytics" && (
@@ -156,7 +165,7 @@ export function Dashboard({
           milestoneTemplates={milestoneTemplates}
           selectionCatalog={selectionCatalog}
           clients={clientOptions}
-          quotesByLeadId={quotesByLeadId}
+          latestQuotesByLeadId={latestQuotesByLeadId}
           role={role}
         />
       )}

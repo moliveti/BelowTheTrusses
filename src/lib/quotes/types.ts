@@ -35,6 +35,12 @@ export interface Quote {
   selections: QuoteSelection[];
 }
 
+/** A lead's most recent quote -- enough to link its PDF and show what was quoted. */
+export interface LatestQuote {
+  id: string;
+  total: number;
+}
+
 export interface SelectionCatalogItem {
   id: string;
   category: string;

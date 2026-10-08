@@ -36,7 +36,7 @@ interface QuotePanelProps {
   referralSources: ReferralSource[];
   clients: ClientOption[];
   onClose: () => void;
-  onCreated: (result: { lead: Lead; projectId: string; quoteId: string }) => void;
+  onCreated: (result: { lead: Lead; projectId: string; quoteId: string; total: number }) => void;
 }
 
 /** Builds a new quote, or -- given `editQuoteId` -- reopens a saved one pre-filled with its hours, rates, selections and terms. */
@@ -268,7 +268,7 @@ function QuoteForm({
       .eq("id", saved.projectId);
     if (projectError) return setError(projectError.code === "23505" ? "That project name is already used by this client." : projectError.message);
 
-    onCreated({ lead: lead!, projectId: saved.projectId, quoteId: saved.quoteId });
+    onCreated({ lead: lead!, projectId: saved.projectId, quoteId: saved.quoteId, total });
   }
 
   async function submit(e: React.FormEvent) {
@@ -461,6 +461,7 @@ function QuoteForm({
       lead: { ...effectiveLead, status: "Quote Sent", convertedProjectId: project.id, convertedSowId },
       projectId: project.id,
       quoteId: quote.id,
+      total,
     });
   }
 

@@ -9,7 +9,9 @@ import type { MilestoneTemplateGroup } from "@/lib/milestoneTemplates/types";
 import { toIsoDate } from "@/lib/hours/dates";
 import { SCOPE_CATEGORIES } from "@/lib/scope";
 import { US_STATES } from "@/lib/usStates";
-import type { SelectionCatalogItem } from "@/lib/quotes/types";
+import type { LatestQuote, SelectionCatalogItem } from "@/lib/quotes/types";
+import { OPEN_LEAD_STATUSES, summarizePendingQuotes } from "@/lib/quotes/pipeline";
+import { fmtUsd } from "@/lib/dashboard/format";
 import type { ClientOption } from "@/lib/clients/types";
 import type { Role } from "@/lib/profile";
 import { canBuildQuotes } from "@/lib/permissions";
@@ -29,12 +31,11 @@ const STATUSES: LeadStatus[] = [
   "Lost",
   "Business Not Materialized",
 ];
-const OPEN_STATUSES: LeadStatus[] = ["New Prospect", "Quote Sent", "Contract Submitted"];
 const TYPES = ["Residential", "Commercial", "Furniture"] as const;
 const REFERRAL_TYPES = ["Past Client", "Realtor", "Vendor", "Other"] as const;
 const NEW_SOURCE_SENTINEL = "__new__";
 
-type SortField = "name" | "type" | "budget" | "referral" | "status" | "days";
+type SortField = "name" | "type" | "budget" | "quoted" | "referral" | "status" | "days";
 type StatusFilter = "active" | "all" | LeadStatus;
 
 function daysSince(dateIso: string): number {
@@ -78,7 +79,7 @@ export function LeadsTab({
   milestoneTemplates,
   selectionCatalog,
   clients,
-  quotesByLeadId: initialQuotesByLeadId,
+  latestQuotesByLeadId: initialLatestQuotes,
   role,
 }: {
   leads: Lead[];
@@ -86,7 +87,7 @@ export function LeadsTab({
   milestoneTemplates: MilestoneTemplateGroup[];
   selectionCatalog: SelectionCatalogItem[];
   clients: ClientOption[];
-  quotesByLeadId: Record<string, string>;
+  latestQuotesByLeadId: Record<string, LatestQuote>;
   role: Role | null;
 }) {
   const router = useRouter();
@@ -104,11 +105,14 @@ export function LeadsTab({
   // it with no lead yet (e.g. a client calling in directly) -- the builder
   // itself creates the lead as part of submitting.
   const [quoteTarget, setQuoteTarget] = useState<Lead | "standalone" | null>(null);
-  // Keyed by lead id so the Download PDF link is available directly on
-  // every row that has a quote -- not just as a one-time toast right after
-  // creating it -- and always points at the current (latest-generated)
-  // revision, since the PDF route itself regenerates from live data.
-  const [quotesByLeadId, setQuotesByLeadId] = useState(initialQuotesByLeadId);
+  // Keyed by lead id so the Download PDF link and the amount quoted are
+  // available directly on every row that has a quote -- not just as a
+  // one-time toast right after creating it. The PDF link always points at the
+  // current (latest-generated) revision, since the PDF route itself
+  // regenerates from live data.
+  const [latestQuotes, setLatestQuotes] = useState(initialLatestQuotes);
+  // Quote amounts are owner-only (RLS), so everyone else keeps the budget/timeline column.
+  const showQuoted = canBuildQuotes(role);
 
   function upsertLead(lead: Lead) {
     setLeads((prev) => [lead, ...prev]);
@@ -130,7 +134,7 @@ export function LeadsTab({
     } else if (summary.leadReset) {
       patchLead(lead.id, { status: "New Prospect", convertedProjectId: null, convertedSowId: null });
     }
-    setQuotesByLeadId((prev) => {
+    setLatestQuotes((prev) => {
       const next = { ...prev };
       delete next[lead.id];
       return next;
@@ -164,11 +168,14 @@ export function LeadsTab({
 
   const filtered = useMemo(() => {
     return leads.filter((l) => {
-      if (statusFilter === "active") return OPEN_STATUSES.includes(l.status);
+      if (statusFilter === "active") return OPEN_LEAD_STATUSES.includes(l.status);
       if (statusFilter === "all") return true;
       return l.status === statusFilter;
     });
   }, [leads, statusFilter]);
+
+  // Counts every lead that is quoted and still open, whichever filter the table is on.
+  const pending = useMemo(() => summarizePendingQuotes(leads, latestQuotes), [leads, latestQuotes]);
 
   const sorted = useMemo(() => {
     const withDays = filtered.map((l) => ({ lead: l, days: daysSince(l.lastContactedDate ?? l.createdAt) }));
@@ -184,6 +191,9 @@ export function LeadsTab({
         case "budget":
           cmp = (a.lead.budgetRange ?? "").localeCompare(b.lead.budgetRange ?? "");
           break;
+        case "quoted":
+          cmp = (latestQuotes[a.lead.id]?.total ?? -1) - (latestQuotes[b.lead.id]?.total ?? -1);
+          break;
         case "referral":
           cmp = (a.lead.referralSourceName ?? "").localeCompare(b.lead.referralSourceName ?? "");
           break;
@@ -197,7 +207,7 @@ export function LeadsTab({
       return sortAsc ? cmp : -cmp;
     });
     return withDays;
-  }, [filtered, sortField, sortAsc]);
+  }, [filtered, sortField, sortAsc, latestQuotes]);
 
   function toggleSort(field: SortField) {
     if (sortField === field) setSortAsc((v) => !v);
@@ -281,7 +291,11 @@ export function LeadsTab({
                   <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Contact</th>
                   <Th field="type" label="Type" sortField={sortField} sortAsc={sortAsc} onSort={toggleSort} />
                   <th className="px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Scope</th>
-                  <Th field="budget" label="Budget / Timeline" sortField={sortField} sortAsc={sortAsc} onSort={toggleSort} />
+                  {showQuoted ? (
+                    <Th field="quoted" label="Total Quoted" align="right" sortField={sortField} sortAsc={sortAsc} onSort={toggleSort} />
+                  ) : (
+                    <Th field="budget" label="Budget / Timeline" sortField={sortField} sortAsc={sortAsc} onSort={toggleSort} />
+                  )}
                   <Th field="referral" label="Referral" sortField={sortField} sortAsc={sortAsc} onSort={toggleSort} />
                   <Th field="status" label="Status" sortField={sortField} sortAsc={sortAsc} onSort={toggleSort} />
                   <Th field="days" label="Last Contact" sortField={sortField} sortAsc={sortAsc} onSort={toggleSort} />
@@ -311,12 +325,18 @@ export function LeadsTab({
                         <td className="max-w-[160px] px-3 py-2 text-ink/70">
                           {lead.scopeTags.length > 0 ? lead.scopeTags.join(", ") : "—"}
                         </td>
-                        <td className="px-3 py-2 text-ink/70">
-                          {lead.budgetRange && <div>{lead.budgetRange}</div>}
-                          {formatTimelineRange(lead.timelineStartMonth, lead.timelineEndMonth) && (
-                            <div>{formatTimelineRange(lead.timelineStartMonth, lead.timelineEndMonth)}</div>
-                          )}
-                        </td>
+                        {showQuoted ? (
+                          <td className="px-3 py-2 text-right font-mono tabular-nums">
+                            {latestQuotes[lead.id] ? fmtUsd(latestQuotes[lead.id].total) : <span className="text-ink/40">—</span>}
+                          </td>
+                        ) : (
+                          <td className="px-3 py-2 text-ink/70">
+                            {lead.budgetRange && <div>{lead.budgetRange}</div>}
+                            {formatTimelineRange(lead.timelineStartMonth, lead.timelineEndMonth) && (
+                              <div>{formatTimelineRange(lead.timelineStartMonth, lead.timelineEndMonth)}</div>
+                            )}
+                          </td>
+                        )}
                         <td className="px-3 py-2 text-ink/70">{lead.referralSourceName ?? "—"}</td>
                         <td className="px-3 py-2">
                           <span className={`border px-2 py-0.5 font-mono text-[10px] uppercase ${s.className}`}>
@@ -334,9 +354,9 @@ export function LeadsTab({
                               Open Project
                             </a>
                           )}
-                          {quotesByLeadId[lead.id] && (
+                          {latestQuotes[lead.id] && (
                             <a
-                              href={`/api/quotes/${quotesByLeadId[lead.id]}/pdf`}
+                              href={`/api/quotes/${latestQuotes[lead.id].id}/pdf`}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
@@ -359,7 +379,7 @@ export function LeadsTab({
                               onSourceCreated={handleSourceCreated}
                               canBuildQuote={canBuildQuotes(role)}
                               onBuildQuoteRequested={() => setQuoteTarget(lead)}
-                              hasQuote={Boolean(quotesByLeadId[lead.id])}
+                              hasQuote={Boolean(latestQuotes[lead.id])}
                               onDeleteRequested={(mode) => setDeleteTarget({ lead, mode })}
                               onConverted={(projectId) => handleConverted(lead, projectId)}
                               onEditQuoteRequested={() => setEditTarget(lead)}
@@ -371,6 +391,21 @@ export function LeadsTab({
                   );
                 })}
               </tbody>
+              {showQuoted && (
+                <tfoot>
+                  <tr className="border-t-2 border-ink bg-canvas">
+                    <td colSpan={4} className="px-3 py-2.5 font-mono text-[10.5px] uppercase tracking-wide text-ink/60">
+                      Quoted &amp; still alive · {pending.count} {pending.count === 1 ? "project" : "projects"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-sm font-bold tabular-nums">{fmtUsd(pending.total)}</td>
+                    <td colSpan={4} className="px-3 py-2.5 font-mono text-[11px] text-ink/60">
+                      {pending.awaitingDecision.count} awaiting decision ({fmtUsd(pending.awaitingDecision.total)})
+                      {pending.contractOut.count > 0 &&
+                        ` · ${pending.contractOut.count} contract out (${fmtUsd(pending.contractOut.total)})`}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}
@@ -398,15 +433,16 @@ export function LeadsTab({
         />
       )}
 
-      {editTarget && quotesByLeadId[editTarget.id] && (
+      {editTarget && latestQuotes[editTarget.id] && (
         <QuoteBuilderPanel
           lead={editTarget}
-          editQuoteId={quotesByLeadId[editTarget.id]}
+          editQuoteId={latestQuotes[editTarget.id].id}
           selectionCatalog={selectionCatalog}
           referralSources={referralSources}
           clients={clients}
           onClose={() => setEditTarget(null)}
-          onCreated={() => {
+          onCreated={({ quoteId, total }) => {
+            setLatestQuotes((prev) => ({ ...prev, [editTarget.id]: { id: quoteId, total } }));
             setNotice({
               text: `Quote for "${editTarget.name}" saved. Download PDF to get the updated version; earlier PDFs stay available under Documents.`,
             });
@@ -423,14 +459,16 @@ export function LeadsTab({
           referralSources={referralSources}
           clients={clients}
           onClose={() => setQuoteTarget(null)}
-          onCreated={({ lead: resultLead, quoteId }) => {
+          onCreated={({ lead: resultLead, quoteId, total }) => {
             if (leads.some((l) => l.id === resultLead.id)) {
               patchLead(resultLead.id, resultLead);
             } else {
               upsertLead(resultLead);
             }
-            setQuotesByLeadId((prev) => ({ ...prev, [resultLead.id]: quoteId }));
+            setLatestQuotes((prev) => ({ ...prev, [resultLead.id]: { id: quoteId, total } }));
             setQuoteTarget(null);
+            // Re-fetch so the dashboard's Pending Quotes card picks up the new quote too.
+            router.refresh();
           }}
         />
       )}
@@ -441,12 +479,14 @@ export function LeadsTab({
 function Th({
   field,
   label,
+  align = "left",
   sortField,
   sortAsc,
   onSort,
 }: {
   field: SortField;
   label: string;
+  align?: "left" | "right";
   sortField: SortField;
   sortAsc: boolean;
   onSort: (f: SortField) => void;
@@ -455,7 +495,9 @@ function Th({
   return (
     <th
       onClick={() => onSort(field)}
-      className="cursor-pointer select-none px-3 py-2 text-left font-mono text-[10.5px] uppercase tracking-wide text-ink/50 hover:text-ink"
+      className={`cursor-pointer select-none px-3 py-2 font-mono text-[10.5px] uppercase tracking-wide text-ink/50 hover:text-ink ${
+        align === "right" ? "text-right" : "text-left"
+      }`}
     >
       {label} {active && (sortAsc ? "▲" : "▼")}
     </th>

@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Quote, SelectionCatalogItem } from "./types";
+import type { LatestQuote, Quote, SelectionCatalogItem } from "./types";
 
 export async function getSelectionCatalog(): Promise<SelectionCatalogItem[]> {
   const supabase = await createClient();
@@ -18,18 +18,18 @@ export async function getSelectionCatalog(): Promise<SelectionCatalogItem[]> {
   }));
 }
 
-/** Most recent quote id per lead, so the Leads table can show a persistent Download PDF link on every row that already has one -- not just right after creating it in the current session. */
-export async function getLatestQuoteIdsByLead(): Promise<Record<string, string>> {
+/** Most recent quote per lead (id and total), so the Leads table can show a persistent Download PDF link and the amount quoted on every row that already has one -- not just right after creating it in the current session. */
+export async function getLatestQuotesByLead(): Promise<Record<string, LatestQuote>> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("quotes")
-    .select("id, lead_id, created_at")
+    .select("id, lead_id, total, created_at")
     .order("created_at", { ascending: false });
   if (error) throw new Error(`quotes: ${error.message}`);
 
-  const byLead: Record<string, string> = {};
+  const byLead: Record<string, LatestQuote> = {};
   for (const row of data ?? []) {
-    if (!(row.lead_id in byLead)) byLead[row.lead_id] = row.id;
+    if (!(row.lead_id in byLead)) byLead[row.lead_id] = { id: row.id, total: Number(row.total) };
   }
   return byLead;
 }

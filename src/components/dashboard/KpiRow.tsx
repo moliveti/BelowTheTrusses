@@ -4,6 +4,11 @@ import type { RevenueRow } from "@/lib/dashboard/types";
 import { distinctYears, yearTotal, yoyDeltaPct } from "@/lib/dashboard/aggregate";
 import { fmtUsd } from "@/lib/dashboard/format";
 
+export const kpiCardClass = (highlight: boolean) =>
+  `border-t-2 border-t-brand-accent px-4 py-3 ${
+    highlight ? "border border-brand-accent/40 bg-brand-accent/5" : "border border-line bg-surface"
+  }`;
+
 export function KpiRow({
   rows,
   currentYear,
@@ -36,13 +41,8 @@ export function KpiRow({
   return (
     <div className={`grid grid-cols-2 gap-4 ${extra ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
       {cards.map((k) => (
-        <div
-          key={k.label}
-          className={`border-t-2 border-t-brand-accent p-5 ${
-            k.isCurrent ? "border border-brand-accent/40 bg-brand-accent/5" : "border border-line bg-surface"
-          }`}
-        >
-          <div className="mb-2 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{k.label}</div>
+        <div key={k.label} className={kpiCardClass(k.isCurrent)}>
+          <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-wide text-ink/50">{k.label}</div>
           <div className="font-mono text-xl tabular-nums text-ink">{k.value}</div>
           {k.delta !== null && (
             <div className={`mt-1.5 font-mono text-xs ${k.delta >= 0 ? "text-positive" : "text-warning"}`}>
