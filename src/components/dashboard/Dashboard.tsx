@@ -100,6 +100,23 @@ export function Dashboard({
   const currentMonth = now.getMonth() + 1;
 
   // Quote amounts are owner-only (Amy + Mariano); anyone else gets null and keeps the Business Mix widget.
+  // Starting a commercial project is owner-only (Amy + Mariano); clients that already
+  // have a commercial project are offered first, busiest first (Carrollton Office Equipment).
+  const newCommercial = useMemo(
+    () =>
+      canBuildQuotes(role)
+        ? {
+            commercialClients: clients
+              .filter((c) => c.types.includes("Commercial"))
+              .sort((a, b) => b.projectCount - a.projectCount || a.name.localeCompare(b.name))
+              .map(({ id, name }) => ({ id, name })),
+            allClients: clientOptions,
+            contractors: contractedWork.rates,
+          }
+        : undefined,
+    [role, clients, clientOptions, contractedWork.rates]
+  );
+
   const pendingQuotes = useMemo(
     () => (canBuildQuotes(role) ? summarizePendingQuotes(leads, latestQuotesByLeadId) : null),
     [role, leads, latestQuotesByLeadId]
@@ -188,7 +205,7 @@ export function Dashboard({
         />
       )}
       {tab === "productivity" && <ProductivityTab entries={contractedWork.timeEntries} projects={projects} payments={payments} />}
-      {tab === "projects" && <ProjectsIndex projects={projects} />}
+      {tab === "projects" && <ProjectsIndex projects={projects} newCommercial={newCommercial} />}
       {tab === "clients" && <ClientsIndex clients={clients} />}
       {tab === "payments" && <PaymentScheduleTable payments={payments} />}
       {tab === "sow" && <SowTab rows={data.sow} />}

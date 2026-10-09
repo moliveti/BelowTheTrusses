@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ProjectListItem } from "@/lib/projects/types";
+import type { ClientOption } from "@/lib/clients/types";
+import type { SubcontractorRates } from "@/lib/hours/types";
 import { fmtUsd } from "@/lib/dashboard/format";
+import { NewCommercialProjectPanel } from "./NewCommercialProjectPanel";
 
 const TYPE_CLASS: Record<string, string> = {
   Residential: "text-[var(--positive)]",
@@ -50,7 +54,16 @@ function PillToggle<T extends string>({
   );
 }
 
-export function ProjectsIndex({ projects }: { projects: ProjectListItem[] }) {
+export function ProjectsIndex({
+  projects,
+  newCommercial,
+}: {
+  projects: ProjectListItem[];
+  /** Present only for owners: what the "New Commercial Project" form needs. Staff don't get the button. */
+  newCommercial?: { commercialClients: ClientOption[]; allClients: ClientOption[]; contractors: SubcontractorRates[] };
+}) {
+  const router = useRouter();
+  const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<Set<BillingStatus>>(new Set<BillingStatus>(["Active"]));
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set(ALL_TYPES));
@@ -87,24 +100,49 @@ export function ProjectsIndex({ projects }: { projects: ProjectListItem[] }) {
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">All Projects &amp; Billing Status</span>
       </div>
 
-      <input
-        type="text"
-        placeholder="Search projects or clients…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="mb-4 w-full max-w-sm border border-line px-3 py-2 text-sm outline-none focus:border-brand-primary"
-      />
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <input
+            type="text"
+            placeholder="Search projects or clients…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="mb-4 w-full max-w-sm border border-line px-3 py-2 text-sm outline-none focus:border-brand-primary"
+          />
 
-      <div className="mb-4 flex flex-wrap gap-x-8 gap-y-3">
-        <div>
-          <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink/50">Status</div>
-          <PillToggle options={ALL_STATUSES} selected={selectedStatuses} onToggle={toggleStatus} />
+          <div className="flex flex-wrap gap-x-8 gap-y-3">
+            <div>
+              <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink/50">Status</div>
+              <PillToggle options={ALL_STATUSES} selected={selectedStatuses} onToggle={toggleStatus} />
+            </div>
+            <div>
+              <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink/50">Type</div>
+              <PillToggle options={ALL_TYPES} selected={selectedTypes} onToggle={toggleType} />
+            </div>
+          </div>
         </div>
-        <div>
-          <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wide text-ink/50">Type</div>
-          <PillToggle options={ALL_TYPES} selected={selectedTypes} onToggle={toggleType} />
-        </div>
+
+        {newCommercial && (
+          <button
+            onClick={() => setCreating(true)}
+            className="border border-ink px-3 py-1.5 font-mono text-[11px] uppercase text-ink hover:bg-canvas"
+          >
+            + New Commercial Project
+          </button>
+        )}
       </div>
+
+      {creating && newCommercial && (
+        <NewCommercialProjectPanel
+          {...newCommercial}
+          existingProjects={projects}
+          onClose={() => setCreating(false)}
+          onCreated={(projectId) => {
+            setCreating(false);
+            router.push(`/projects/${projectId}`);
+          }}
+        />
+      )}
       <div className="overflow-x-auto border border-line bg-surface">
         <table className="w-full min-w-[640px] border-collapse text-[13px]">
           <thead>

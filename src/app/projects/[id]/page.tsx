@@ -5,6 +5,7 @@ import { canBuildQuotes } from "@/lib/permissions";
 import { getProjectDetail } from "@/lib/projects/queries";
 import { getQuoteForProject } from "@/lib/quotes/queries";
 import { getContractForProject } from "@/lib/contracts/queries";
+import { getProjectSubcontractorAssignments, getSubcontractorRates } from "@/lib/hours/queries";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
 import { MilestoneSection } from "@/components/projects/MilestoneSection";
@@ -16,6 +17,7 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ProjectNameEditor } from "@/components/projects/ProjectNameEditor";
 import { DeleteProjectSection } from "@/components/projects/DeleteProjectSection";
 import { DocumentsList } from "@/components/projects/DocumentsList";
+import { ContractorsSection } from "@/components/projects/ContractorsSection";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,6 +30,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const quote = canBuildQuotes(role) ? await getQuoteForProject(id) : null;
   const contract = canBuildQuotes(role) ? await getContractForProject(id) : null;
+  const [assignments, contractors] = canBuildQuotes(role)
+    ? await Promise.all([getProjectSubcontractorAssignments(), getSubcontractorRates()])
+    : [[], []];
 
   const supabase = await createClient();
   const {
@@ -107,6 +112,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         hasUnknownRate={project.hasUnknownRate}
         hasHoursLogged={project.hoursByPerson.length > 0}
       />
+
+      {canBuildQuotes(role) && (
+        <CollapsibleSection title="Contractors & Allocated Hours">
+          <ContractorsSection
+            projectId={project.id}
+            projectType={project.type}
+            initialAssignments={assignments.filter((a) => a.projectId === project.id)}
+            contractors={contractors}
+          />
+        </CollapsibleSection>
+      )}
 
       {project.hoursByPerson.length === 0 ? (
         <CollapsibleSection title="Hours & Cost">
