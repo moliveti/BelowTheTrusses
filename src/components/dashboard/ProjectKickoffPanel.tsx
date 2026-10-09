@@ -9,7 +9,8 @@ import { resolveClientId } from "@/lib/clients/resolveClient";
 import { toIsoDate } from "@/lib/hours/dates";
 import { ClientPicker } from "./ClientPicker";
 
-const TYPES = ["Residential", "Commercial", "Furniture"] as const;
+// Commercial work isn't kicked off from a lead -- it starts from Projects -> New Commercial Project.
+const TYPES = ["Residential", "Furniture"] as const;
 const BILLING_METHODS = ["Fixed Fee", "Hourly", "Commission"] as const;
 const BLANK_TEMPLATE = "__blank__";
 
@@ -42,7 +43,7 @@ export function ProjectKickoffPanel({
   const [projectName, setProjectName] = useState(lead.name);
   const [client, setClient] = useState<{ id: string | null; name: string }>({ id: null, name: lead.name });
   const [projectType, setProjectType] = useState<(typeof TYPES)[number]>(
-    (lead.projectType as (typeof TYPES)[number]) || "Residential"
+    lead.projectType === "Furniture" ? "Furniture" : "Residential"
   );
   const [contractValue, setContractValue] = useState("");
   const [billingMethod, setBillingMethod] = useState<(typeof BILLING_METHODS)[number]>("Fixed Fee");

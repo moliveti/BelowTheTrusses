@@ -31,7 +31,8 @@ const STATUSES: LeadStatus[] = [
   "Lost",
   "Business Not Materialized",
 ];
-const TYPES = ["Residential", "Commercial", "Furniture"] as const;
+// Commercial work isn't quoted here -- it starts from Projects -> New Commercial Project.
+const TYPES = ["Residential", "Furniture"] as const;
 const REFERRAL_TYPES = ["Past Client", "Realtor", "Vendor", "Other"] as const;
 const NEW_SOURCE_SENTINEL = "__new__";
 
@@ -152,7 +153,7 @@ export function LeadsTab({
   function handleConverted(lead: Lead, projectId: string) {
     setExpandedId(null);
     setNotice({
-      text: `"${lead.name}" is signed and is now a project. It has left Quotes & Leads.`,
+      text: `"${lead.name}" is signed and is now a project. It has left Residential Quotes.`,
       href: `/projects/${projectId}`,
       linkLabel: "Open project",
     });
@@ -220,7 +221,7 @@ export function LeadsTab({
   return (
     <div>
       <div className="mb-4 flex items-baseline justify-between border-b-[1.5px] border-ink pb-2">
-        <h2 className="text-lg font-normal">Quotes &amp; Leads</h2>
+        <h2 className="text-lg font-normal">Residential Quotes</h2>
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink/50">Intake, Follow-Up &amp; Quote Building</span>
       </div>
 
@@ -1224,7 +1225,7 @@ function LeadEditPanel({
         <div className="col-span-2 border border-brand-accent bg-surface p-3 text-sm sm:col-span-4">
           <p className="mb-2 text-ink">
             Mark <strong>{lead.name}</strong> as signed? The contract is recorded as signed and this quote becomes a project (Under
-            Contract). It will leave Quotes &amp; Leads and appear on the Projects page.
+            Contract). It will leave Residential Quotes and appear on the Projects page.
           </p>
           <div className="flex items-center gap-3">
             <button

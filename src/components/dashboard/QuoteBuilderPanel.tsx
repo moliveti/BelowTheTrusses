@@ -17,7 +17,11 @@ import { US_STATES } from "@/lib/usStates";
 import { ScopePills, ReferralSourceSelect } from "./LeadsTab";
 import { ClientPicker } from "./ClientPicker";
 
-const TYPES = ["Residential", "Commercial", "Furniture"] as const;
+// Commercial work isn't quoted here -- it starts from Projects -> New Commercial Project.
+const TYPES = ["Residential", "Furniture"] as const;
+type QuoteType = (typeof TYPES)[number];
+const asQuoteType = (value: string | null | undefined): QuoteType =>
+  (TYPES as readonly string[]).includes(value ?? "") ? (value as QuoteType) : "Residential";
 const FINISH_SELECTIONS_TASK = "Finish Selections";
 
 function fmtUsd(n: number): string {
@@ -106,9 +110,7 @@ function QuoteForm({
   const [referralSourceName, setReferralSourceName] = useState<string | null>(lead?.referralSourceName ?? null);
   const [localReferralSources, setLocalReferralSources] = useState<ReferralSource[]>([]);
 
-  const [projectType, setProjectType] = useState<(typeof TYPES)[number]>(
-    existing?.projectType ?? ((lead?.projectType as (typeof TYPES)[number]) || "Residential")
-  );
+  const [projectType, setProjectType] = useState<QuoteType>(asQuoteType(existing?.projectType ?? lead?.projectType));
   const [lineItems, setLineItems] = useState<DraftLineItem[]>(() =>
     mergeLineItems(QUOTE_TASK_CATALOG, existing?.lineItems ?? [], FINISH_SELECTIONS_TASK)
   );

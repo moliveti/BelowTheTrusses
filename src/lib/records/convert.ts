@@ -23,7 +23,7 @@ export async function markContractSent(db: Db, projectId: string): Promise<Resul
  * The contract is signed: the quote-stage project becomes a real project
  * (Under Contract) and every piece that tracked it through the pipeline is
  * closed out in the same step -- the contract, the quote, the lead (which
- * then drops out of Quotes & Leads) and its open proposal row.
+ * then drops out of Residential Quotes) and its open proposal row.
  */
 export async function markProjectSigned(db: Db, projectId: string): Promise<Result<{ leadsConverted: number }>> {
   const { data: project, error: projectError } = await db

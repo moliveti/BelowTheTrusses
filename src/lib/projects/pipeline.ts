@@ -1,6 +1,6 @@
 /**
  * A project that is still moving through the sales pipeline (quoted, or
- * contract sent but not yet signed) lives in Quotes & Leads, not the Projects
+ * contract sent but not yet signed) lives in Residential Quotes, not the Projects
  * list. It only counts as in the pipeline while a lead is still tracking it:
  * a project with no lead behind it, or whose lead is already Signed Contract,
  * is shown so it can't end up invisible everywhere.

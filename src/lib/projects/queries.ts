@@ -27,7 +27,7 @@ export async function getAllMilestonesForIntelligence(): Promise<MilestoneForInt
   });
 }
 
-/** The Projects list: everything except quotes and unsigned contracts, which stay in Quotes & Leads until the contract is signed. */
+/** The Projects list: everything except quotes and unsigned contracts, which stay in Residential Quotes until the contract is signed. */
 export async function getProjectsIndex(): Promise<ProjectListItem[]> {
   const supabase = await createClient();
   const [items, leadsRes] = await Promise.all([
