@@ -46,8 +46,8 @@ export interface QuoteTaskDefault {
 
 export const QUOTE_TASK_CATALOG: QuoteTaskDefault[] = [
   { section: "Construction Documents", taskName: "Field Verification", rate: 200 },
-  { section: "Construction Documents", taskName: "Floor Plan Options", rate: 200 },
   { section: "Construction Documents", taskName: "Field Input", rate: 200 },
+  { section: "Construction Documents", taskName: "Floor Plan Options", rate: 200 },
   { section: "Construction Documents", taskName: "Cover Sheet", rate: 200 },
   { section: "Construction Documents", taskName: "Exterior Elevations", rate: 200 },
   { section: "Construction Documents", taskName: "Demolition Plan", rate: 200 },
