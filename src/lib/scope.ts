@@ -71,9 +71,9 @@ export const QUOTE_TASK_CATALOG: QuoteTaskDefault[] = [
   { section: "FFE", taskName: "Order and Transmit Samples", rate: 200 },
   { section: "Construction Administration", taskName: "Contractor Coordination/RFIs", rate: 200 },
   { section: "Construction Administration", taskName: "Shop Drawing Review", rate: 200 },
-  { section: "Construction Administration", taskName: "Site Visits", rate: 150 },
-  { section: "Construction Administration", taskName: "Punch List", rate: 150 },
-  { section: "Construction Administration", taskName: "Scan Punch List, Transmit, Email Coordination", rate: 150 },
+  { section: "Construction Administration", taskName: "Site Visits", rate: 200 },
+  { section: "Construction Administration", taskName: "Punch List", rate: 200 },
+  { section: "Construction Administration", taskName: "Scan Punch List, Transmit, Email Coordination", rate: 200 },
   { section: "Basic Services", taskName: "Budget Development", rate: 150 },
   { section: "Basic Services", taskName: "Contract", rate: 150 },
 ];
